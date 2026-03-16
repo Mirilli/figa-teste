@@ -1,0 +1,259 @@
+'use strict';
+
+const express = require('express');
+const { body, param, validationResult } = require('express-validator');
+
+const db = require('../database');
+const { requireAuth, requireAdmin }  = require('../middleware/auth');
+const { auditLog, sanitizeUser }     = require('../middleware/security');
+
+const router = express.Router();
+
+// Todos os endpoints requerem auth + role admin
+router.use(requireAuth, requireAdmin);
+
+// ─── GET /api/admin/dashboard ─────────────────────────────────────────────────
+router.get('/dashboard', (req, res) => {
+  const stats = {
+    orders: db.prepare(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'paid'       THEN 1 ELSE 0 END) AS paid,
+        SUM(CASE WHEN status = 'shipped'    THEN 1 ELSE 0 END) AS shipped,
+        SUM(CASE WHEN status = 'pending' OR status = 'awaiting_payment' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status = 'cancelled'  THEN 1 ELSE 0 END) AS cancelled,
+        SUM(CASE WHEN status = 'paid' OR status = 'shipped' OR status = 'delivered'
+            THEN total ELSE 0 END) AS revenue_total,
+        SUM(CASE WHEN date(created_at) = date('now') THEN 1 ELSE 0 END) AS today,
+        SUM(CASE WHEN created_at >= datetime('now', '-7 days')
+            AND (status = 'paid' OR status = 'shipped' OR status = 'delivered')
+            THEN total ELSE 0 END) AS revenue_7d
+      FROM orders
+    `).get(),
+
+    users: db.prepare(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN date(created_at) = date('now') THEN 1 ELSE 0 END) AS today,
+        SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS last_7d
+      FROM users WHERE role = 'customer'
+    `).get(),
+
+    products: db.prepare(`
+      SELECT COUNT(*) AS total, SUM(stock) AS total_stock,
+             SUM(CASE WHEN stock = 0 THEN 1 ELSE 0 END) AS out_of_stock
+      FROM products WHERE active = 1
+    `).get(),
+
+    recentOrders: db.prepare(`
+      SELECT o.id, o.status, o.total, o.created_at,
+             u.name AS customer_name, u.email AS customer_email
+      FROM orders o JOIN users u ON u.id = o.user_id
+      ORDER BY o.created_at DESC LIMIT 10
+    `).all(),
+
+    topProducts: db.prepare(`
+      SELECT oi.product_name, SUM(oi.quantity) AS qty_sold,
+             SUM(oi.subtotal) AS revenue
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      WHERE o.status IN ('paid','shipped','delivered')
+      GROUP BY oi.product_sku
+      ORDER BY qty_sold DESC LIMIT 5
+    `).all(),
+  };
+
+  return res.json(stats);
+});
+
+// ─── GET /api/admin/orders ────────────────────────────────────────────────────
+router.get('/orders', (req, res) => {
+  const { status, page = 1, limit = 20, search } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  let where = 'WHERE 1=1';
+  const params = [];
+  if (status) { where += ' AND o.status = ?'; params.push(status); }
+  if (search) {
+    where += ' AND (u.name LIKE ? OR u.email LIKE ? OR CAST(o.id AS TEXT) = ?)';
+    params.push(`%${search}%`, `%${search}%`, search);
+  }
+
+  const orders = db.prepare(`
+    SELECT o.id, o.status, o.subtotal, o.shipping_cost, o.total,
+           o.mp_payment_id, o.created_at, o.paid_at, o.shipped_at,
+           o.shipping_name, o.shipping_address,
+           u.name AS customer_name, u.email AS customer_email,
+           (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
+    FROM orders o JOIN users u ON u.id = o.user_id
+    ${where}
+    ORDER BY o.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, parseInt(limit), offset);
+
+  const { total_count } = db.prepare(`
+    SELECT COUNT(*) AS total_count FROM orders o
+    JOIN users u ON u.id = o.user_id ${where}
+  `).get(...params);
+
+  return res.json({ orders, total: total_count, page: parseInt(page), limit: parseInt(limit) });
+});
+
+// ─── GET /api/admin/orders/:id ────────────────────────────────────────────────
+router.get('/orders/:id', (req, res) => {
+  const order = db.prepare(`
+    SELECT o.*, u.name AS customer_name, u.email AS customer_email
+    FROM orders o JOIN users u ON u.id = o.user_id WHERE o.id = ?
+  `).get(req.params.id);
+
+  if (!order) return res.status(404).json({ error: 'Pedido não encontrado.' });
+
+  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+  const { integrity_hash, ...safeOrder } = order;
+  return res.json({ ...safeOrder, items });
+});
+
+// ─── PATCH /api/admin/orders/:id/status ───────────────────────────────────────
+router.patch('/orders/:id/status',
+  param('id').isInt(),
+  body('status').isIn(['pending','awaiting_payment','paid','processing','shipped','delivered','cancelled','refunded']),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Pedido não encontrado.' });
+
+    const { status } = req.body;
+    const extra = {};
+    if (status === 'shipped') extra.shipped_at = "datetime('now')";
+    if (status === 'delivered') extra.delivered_at = "datetime('now')";
+
+    db.prepare(`
+      UPDATE orders SET status = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(status, order.id);
+
+    auditLog(req.user.id, 'order_status_updated', req, {
+      entity: 'order', entityId: order.id,
+      details: { from: order.status, to: status },
+    });
+
+    return res.json({ message: 'Status atualizado.', id: order.id, status });
+  }
+);
+
+// ─── GET /api/admin/users ─────────────────────────────────────────────────────
+router.get('/users', (req, res) => {
+  const { page = 1, limit = 20, search } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  let where = "WHERE u.role = 'customer'";
+  const params = [];
+  if (search) {
+    where += ' AND (u.name LIKE ? OR u.email LIKE ?)';
+    params.push(`%${search}%`, `%${search}%`);
+  }
+
+  const users = db.prepare(`
+    SELECT u.id, u.name, u.email, u.active, u.created_at,
+           COUNT(o.id) AS order_count,
+           SUM(CASE WHEN o.status IN ('paid','shipped','delivered') THEN o.total ELSE 0 END) AS total_spent
+    FROM users u
+    LEFT JOIN orders o ON o.user_id = u.id
+    ${where}
+    GROUP BY u.id
+    ORDER BY u.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, parseInt(limit), offset);
+
+  const { total_count } = db.prepare(`
+    SELECT COUNT(*) AS total_count FROM users u ${where}
+  `).get(...params);
+
+  return res.json({ users, total: total_count });
+});
+
+// ─── PATCH /api/admin/users/:id/active ───────────────────────────────────────
+router.patch('/users/:id/active',
+  param('id').isInt(),
+  body('active').isBoolean(),
+  (req, res) => {
+    if (parseInt(req.params.id) === req.user.id) {
+      return res.status(400).json({ error: 'Não é possível desativar o próprio usuário.' });
+    }
+    db.prepare('UPDATE users SET active = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(req.body.active ? 1 : 0, req.params.id);
+
+    auditLog(req.user.id, 'user_active_changed', req, {
+      entity: 'user', entityId: req.params.id,
+      details: { active: req.body.active },
+    });
+
+    return res.json({ message: 'Usuário atualizado.' });
+  }
+);
+
+// ─── GET /api/admin/products ──────────────────────────────────────────────────
+router.get('/products', (req, res) => {
+  const products = db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
+  return res.json(products);
+});
+
+// ─── PATCH /api/admin/products/:id/stock ─────────────────────────────────────
+router.patch('/products/:id/stock',
+  param('id').isInt(),
+  body('stock').isInt({ min: 0 }),
+  (req, res) => {
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+    if (!product) return res.status(404).json({ error: 'Produto não encontrado.' });
+
+    db.prepare('UPDATE products SET stock = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(req.body.stock, product.id);
+
+    auditLog(req.user.id, 'product_stock_updated', req, {
+      entity: 'product', entityId: product.id,
+      details: { from: product.stock, to: req.body.stock },
+    });
+
+    return res.json({ message: 'Estoque atualizado.', id: product.id, stock: req.body.stock });
+  }
+);
+
+// ─── PATCH /api/admin/products/:id/price ─────────────────────────────────────
+router.patch('/products/:id/price',
+  param('id').isInt(),
+  body('price').isFloat({ min: 0.01 }),
+  (req, res) => {
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+    if (!product) return res.status(404).json({ error: 'Produto não encontrado.' });
+
+    db.prepare('UPDATE products SET price = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(req.body.price, product.id);
+
+    auditLog(req.user.id, 'product_price_updated', req, {
+      entity: 'product', entityId: product.id,
+      details: { from: product.price, to: req.body.price },
+    });
+
+    return res.json({ message: 'Preço atualizado.' });
+  }
+);
+
+// ─── GET /api/admin/audit-log ─────────────────────────────────────────────────
+router.get('/audit-log', (req, res) => {
+  const { page = 1, limit = 50 } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  const logs = db.prepare(`
+    SELECT al.*, u.name AS user_name, u.email AS user_email
+    FROM audit_log al
+    LEFT JOIN users u ON u.id = al.user_id
+    ORDER BY al.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(parseInt(limit), offset);
+
+  return res.json(logs);
+});
+
+module.exports = router;
