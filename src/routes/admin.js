@@ -475,6 +475,52 @@ router.delete('/sections/:id',
 );
 
 // ─── Produto com imagem (image_url já é salvo pelo PUT /products/:id) ─────────
+
+// ═══════════════════════════════════════════════════════════
+//  STORE SETTINGS
+// ═══════════════════════════════════════════════════════════
+
+// GET /api/admin/settings
+router.get('/settings', (req, res) => {
+  const rows = db.prepare('SELECT key, value FROM store_settings').all();
+  return res.json(Object.fromEntries(rows.map(r => [r.key, r.value])));
+});
+
+// PUT /api/admin/settings  — salva múltiplos campos de uma vez
+router.put('/settings',
+  body('settings').isObject(),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ error: 'Dados inválidos.' });
+
+    const ALLOWED = [
+      'store_name','store_tagline','store_email','store_phone','store_whatsapp',
+      'store_cnpj','store_instagram','store_facebook','hero_image_url',
+      'cloudinary_cloud','cloudinary_preset','footer_address',
+      'meta_pixel_id','gtm_id',
+    ];
+
+    const upsert = db.prepare(`
+      INSERT INTO store_settings (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `);
+
+    const save = db.transaction(() => {
+      for (const [key, value] of Object.entries(req.body.settings)) {
+        if (ALLOWED.includes(key)) upsert.run(key, String(value));
+      }
+    });
+    save();
+
+    auditLog(req.user.id, 'settings_updated', req, {
+      details: { keys: Object.keys(req.body.settings) },
+    });
+
+    return res.json({ message: 'Configurações salvas.' });
+  }
+);
+
+// ─── Produto com imagem (image_url já é salvo pelo PUT /products/:id) ─────────
 // GET /api/admin/products — já retorna image_url do schema atualizado
 
 module.exports = router;

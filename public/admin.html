@@ -204,6 +204,7 @@
       <button class="nav-item" onclick="navigate('users')"><span class="icon">👥</span>Clientes</button>
       <div class="nav-section">Site</div>
       <button class="nav-item" onclick="navigate('sections')"><span class="icon">🧩</span>Seções do Site</button>
+      <button class="nav-item" onclick="navigate('settings')"><span class="icon">⚙️</span>Configurações</button>
       <div class="nav-section">Segurança</div>
       <button class="nav-item" onclick="navigate('audit')"><span class="icon">🔍</span>Log de Auditoria</button>
     </nav>
@@ -286,16 +287,20 @@
       </div>
       <div class="form-group" style="grid-column:span 2">
         <label>Foto do produto</label>
-        <div style="display:flex;gap:10px;align-items:flex-start">
-          <div id="p-img-preview" style="width:80px;height:80px;border-radius:10px;background:var(--surface);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:2rem;flex-shrink:0;overflow:hidden">🥣</div>
-          <div style="flex:1">
-            <input type="file" id="p-img-file" accept="image/*" onchange="previewImage(this)" style="display:none"/>
-            <button type="button" class="action-btn" onclick="document.getElementById('p-img-file').click()" style="margin-bottom:6px;width:100%">📁 Selecionar imagem</button>
-            <input type="text" class="form-input" id="p-img-url" placeholder="ou cole uma URL de imagem" oninput="previewImageUrl(this.value)" style="font-size:.8rem"/>
-            <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px">Upload: máx. 1MB · JPG, PNG, WebP</div>
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div id="p-img-preview" style="width:88px;height:88px;border-radius:12px;background:var(--surface);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:2.2rem;flex-shrink:0;overflow:hidden">🥣</div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:7px">
+            <input type="text" class="form-input" id="p-img-url" placeholder="Cole uma URL de imagem (https://...)" oninput="previewImageUrl(this.value)" style="font-size:.85rem"/>
+            <div id="p-cloudinary-btn" style="display:none">
+              <button type="button" class="action-btn" onclick="uploadToCloudinary('product')" style="width:100%">☁️ Fazer upload para Cloudinary</button>
+              <input type="file" id="p-img-file" accept="image/jpeg,image/png,image/webp" style="display:none"/>
+            </div>
+            <div style="font-size:.72rem;color:var(--text-muted);line-height:1.5" id="p-img-hint">
+              Cole uma URL externa (ex: link do Google Drive, Dropbox, etc.).<br/>
+              Para upload direto, configure o Cloudinary em <button onclick="navigate('settings')" style="background:none;border:none;color:var(--caramel);cursor:pointer;font-size:inherit;padding:0;text-decoration:underline">Configurações</button>.
+            </div>
           </div>
         </div>
-        <input type="hidden" id="p-img-data"/>
       </div>
       <div class="form-group" style="grid-column:span 2">
         <label>Descrição</label>
@@ -373,12 +378,12 @@ async function adminLogout() {
 // ═══════════════════════════════════════════════════════════
 //  NAVIGATION
 // ═══════════════════════════════════════════════════════════
-const PAGE_TITLES = { dashboard:'Dashboard', orders:'Pedidos', products:'Produtos & Estoque', users:'Clientes', sections:'Seções do Site', audit:'Log de Auditoria' };
+const PAGE_TITLES = { dashboard:'Dashboard', orders:'Pedidos', products:'Produtos & Estoque', users:'Clientes', sections:'Seções do Site', settings:'Configurações da Loja', audit:'Log de Auditoria' };
 
 function navigate(page) {
   currentPage = page;
   document.querySelectorAll('.nav-item').forEach((n,i) => {
-    const pages = ['dashboard','orders','products','users','sections','audit'];
+    const pages = ['dashboard','orders','products','users','sections','settings','audit'];
     n.classList.toggle('active', pages[i] === page);
   });
   document.getElementById('page-title').textContent = PAGE_TITLES[page] || page;
@@ -727,10 +732,9 @@ function openProductModal(productId = null) {
     document.getElementById('p-stock').value  = p.stock;
     document.getElementById('p-weight').value = p.weight_g;
     document.getElementById('p-desc').value   = p.description;
-    document.getElementById('p-img-data').value = p.image_url || '';
-    document.getElementById('p-img-url').value  = p.image_url && !p.image_url.startsWith('data:') ? p.image_url : '';
+    document.getElementById('p-img-url').value  = p.image_url || '';
     const prev = document.getElementById('p-img-preview');
-    if (p.image_url) { prev.innerHTML = `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover"/>`; }
+    if (p.image_url) { prev.innerHTML = `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentNode.innerHTML='🥣'"/>`; }
     else { prev.innerHTML = '🥣'; }
     document.getElementById('pmodal-save').textContent = 'Salvar Alterações';
   } else {
@@ -743,9 +747,7 @@ function openProductModal(productId = null) {
     document.getElementById('p-stock').value  = '';
     document.getElementById('p-weight').value = '400';
     document.getElementById('p-desc').value    = '';
-    document.getElementById('p-img-data').value = '';
     document.getElementById('p-img-url').value  = '';
-    document.getElementById('p-img-file').value = '';
     document.getElementById('p-img-preview').innerHTML = '🥣';
     document.getElementById('pmodal-save').textContent = 'Criar Produto';
   }
@@ -973,6 +975,189 @@ async function api(url, method='GET', body=null) {
   return res.json();
 }
 
+// ═══════════════════════════════════════════════════════════
+//  SETTINGS
+// ═══════════════════════════════════════════════════════════
+async function renderSettings() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<p style="color:var(--text-muted);padding:24px">Carregando…</p>';
+
+  const s = await api('/api/admin/settings');
+  window._storeSettings = s;
+  checkCloudinaryAvailable();
+
+  c.innerHTML = `
+    <div style="max-width:800px">
+
+      <!-- INFO DA LOJA -->
+      <div class="table-card" style="margin-bottom:24px">
+        <div class="table-head"><div class="table-title">🏪 Informações da Loja</div></div>
+        <div style="padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="form-group">
+            <label>Nome da loja</label>
+            <input type="text" class="form-input" id="st-store_name" value="${s.store_name||''}"/>
+          </div>
+          <div class="form-group">
+            <label>Slogan / tagline</label>
+            <input type="text" class="form-input" id="st-store_tagline" value="${s.store_tagline||''}"/>
+          </div>
+          <div class="form-group">
+            <label>E-mail de contato</label>
+            <input type="email" class="form-input" id="st-store_email" value="${s.store_email||''}"/>
+          </div>
+          <div class="form-group">
+            <label>Telefone / WhatsApp (exibição)</label>
+            <input type="text" class="form-input" id="st-store_phone" value="${s.store_phone||''}"/>
+          </div>
+          <div class="form-group">
+            <label>WhatsApp (só números, ex: 5511999999999)</label>
+            <input type="text" class="form-input" id="st-store_whatsapp" value="${s.store_whatsapp||''}"/>
+          </div>
+          <div class="form-group">
+            <label>CNPJ</label>
+            <input type="text" class="form-input" id="st-store_cnpj" value="${s.store_cnpj||''}"/>
+          </div>
+          <div class="form-group" style="grid-column:span 2">
+            <label>Endereço (rodapé)</label>
+            <input type="text" class="form-input" id="st-footer_address" value="${s.footer_address||''}" placeholder="Rua Exemplo, 123 – São Paulo, SP"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- REDES SOCIAIS -->
+      <div class="table-card" style="margin-bottom:24px">
+        <div class="table-head"><div class="table-title">📱 Redes Sociais</div></div>
+        <div style="padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="form-group">
+            <label>Instagram (URL completa)</label>
+            <input type="text" class="form-input" id="st-store_instagram" value="${s.store_instagram||''}" placeholder="https://instagram.com/suamarca"/>
+          </div>
+          <div class="form-group">
+            <label>Facebook (URL completa)</label>
+            <input type="text" class="form-input" id="st-store_facebook" value="${s.store_facebook||''}" placeholder="https://facebook.com/suamarca"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- IMAGEM HERO -->
+      <div class="table-card" style="margin-bottom:24px">
+        <div class="table-head">
+          <div class="table-title">🖼️ Imagem do Hero (topo da loja)</div>
+        </div>
+        <div style="padding:24px">
+          <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+            <div id="hero-img-preview" style="width:160px;height:120px;border-radius:12px;background:var(--surface);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:3rem;flex-shrink:0;overflow:hidden">
+              ${s.hero_image_url ? `<img src="${s.hero_image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:10px"/>` : '🥣'}
+            </div>
+            <div style="flex:1;min-width:240px">
+              <div class="form-group">
+                <label>URL da imagem do hero</label>
+                <input type="text" class="form-input" id="hero-img-url" value="${s.hero_image_url||''}"
+                  oninput="previewHeroImageUrl(this.value)"
+                  placeholder="https://res.cloudinary.com/... ou outro link"/>
+              </div>
+              <div id="hero-cloudinary-btn" style="display:none;margin-top:8px">
+                <button type="button" class="action-btn" onclick="uploadToCloudinary('hero')" style="width:100%">☁️ Upload para Cloudinary</button>
+                <input type="file" id="hero-img-file" accept="image/jpeg,image/png,image/webp" style="display:none"/>
+              </div>
+              <div style="font-size:.75rem;color:var(--text-muted);margin-top:8px;line-height:1.55">
+                Cole a URL de qualquer imagem hospedada externamente.<br/>
+                Para upload direto, configure o Cloudinary abaixo.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RASTREAMENTO -->
+      <div class="table-card" style="margin-bottom:24px">
+        <div class="table-head"><div class="table-title">📊 Rastreamento & Analytics</div></div>
+        <div style="padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="form-group">
+            <label>Meta Pixel ID</label>
+            <input type="text" class="form-input" id="st-meta_pixel_id" value="${s.meta_pixel_id||''}" placeholder="XXXXXXXXXXXXXXXXXX"/>
+          </div>
+          <div class="form-group">
+            <label>Google Tag Manager ID</label>
+            <input type="text" class="form-input" id="st-gtm_id" value="${s.gtm_id||''}" placeholder="GTM-XXXXXXX"/>
+          </div>
+          <div style="grid-column:span 2;padding:12px;background:rgba(198,149,74,.1);border-radius:10px;font-size:.8rem;color:var(--caramel);border:1px solid rgba(198,149,74,.2)">
+            💡 Os IDs de rastreamento serão injetados automaticamente nas páginas da loja quando preenchidos.
+          </div>
+        </div>
+      </div>
+
+      <!-- CLOUDINARY -->
+      <div class="table-card" style="margin-bottom:24px">
+        <div class="table-head"><div class="table-title">☁️ Cloudinary (Upload de Imagens)</div></div>
+        <div style="padding:24px">
+          <div style="padding:14px;background:var(--blue-lt);border-radius:10px;font-size:.82rem;color:#56CCF2;border:1px solid rgba(86,204,242,.2);margin-bottom:20px;line-height:1.6">
+            <strong>Como configurar (gratuito):</strong><br/>
+            1. Crie uma conta em <a href="https://cloudinary.com" target="_blank" style="color:var(--caramel)">cloudinary.com</a><br/>
+            2. No painel, copie o <strong>Cloud Name</strong><br/>
+            3. Em Settings → Upload → Add upload preset, crie um preset <strong>Unsigned</strong><br/>
+            4. Cole os valores abaixo e salve
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+              <label>Cloud Name</label>
+              <input type="text" class="form-input" id="st-cloudinary_cloud" value="${s.cloudinary_cloud||''}" placeholder="meu-cloud-name"/>
+            </div>
+            <div class="form-group">
+              <label>Upload Preset (Unsigned)</label>
+              <input type="text" class="form-input" id="st-cloudinary_preset" value="${s.cloudinary_preset||''}" placeholder="granovita_unsigned"/>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SALVAR -->
+      <div style="display:flex;justify-content:flex-end;gap:12px;margin-bottom:40px">
+        <button class="btn-confirm" onclick="saveSettings()" id="settings-save" style="padding:12px 32px;font-size:.95rem;border-radius:10px">
+          💾 Salvar todas as configurações
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Mostra botão Cloudinary se já estiver configurado
+  checkCloudinaryAvailable();
+  if (s.cloudinary_cloud && s.cloudinary_preset) {
+    document.getElementById('hero-cloudinary-btn').style.display = 'block';
+  }
+}
+
+async function saveSettings() {
+  const btn = document.getElementById('settings-save');
+  btn.disabled = true; btn.textContent = '⏳ Salvando…';
+
+  const keys = [
+    'store_name','store_tagline','store_email','store_phone','store_whatsapp',
+    'store_cnpj','footer_address','store_instagram','store_facebook',
+    'meta_pixel_id','gtm_id','cloudinary_cloud','cloudinary_preset',
+  ];
+
+  const settings = {};
+  keys.forEach(k => {
+    const el = document.getElementById(`st-${k}`);
+    if (el) settings[k] = el.value.trim();
+  });
+
+  // Hero image URL (separado porque o ID é diferente)
+  settings.hero_image_url = document.getElementById('hero-img-url')?.value.trim() || '';
+
+  try {
+    await api('/api/admin/settings', 'PUT', { settings });
+    window._storeSettings = { ...window._storeSettings, ...settings };
+    checkCloudinaryAvailable();
+    showToast('Configurações salvas! ✅', 'success');
+  } catch(ex) {
+    showToast('Erro ao salvar: ' + ex.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Salvar todas as configurações';
+  }
+}
+
 function showToast(msg, type='') {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = `toast ${type} show`;
@@ -982,30 +1167,69 @@ function showToast(msg, type='') {
 // ═══════════════════════════════════════════════════════════
 //  IMAGE HELPERS
 // ═══════════════════════════════════════════════════════════
-function previewImage(input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (file.size > 1.2 * 1024 * 1024) {
-    showToast('Imagem muito grande! Máx. 1MB.', 'error');
-    input.value = '';
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const data = e.target.result;
-    document.getElementById('p-img-data').value = data;
-    document.getElementById('p-img-url').value  = '';
-    document.getElementById('p-img-preview').innerHTML =
-      `<img src="${data}" style="width:100%;height:100%;object-fit:cover"/>`;
-  };
-  reader.readAsDataURL(file);
-}
-
 function previewImageUrl(url) {
   const prev = document.getElementById('p-img-preview');
-  document.getElementById('p-img-data').value = '';
   if (!url) { prev.innerHTML = '🥣'; return; }
   prev.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentNode.innerHTML='❌'"/>`;
+}
+
+function previewHeroImageUrl(url) {
+  const prev = document.getElementById('hero-img-preview');
+  if (!prev) return;
+  if (!url) { prev.innerHTML = '🥣'; return; }
+  prev.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:10px" onerror="this.parentNode.innerHTML='❌'"/>`;
+}
+
+// Verifica se Cloudinary está configurado e mostra/esconde o botão de upload
+function checkCloudinaryAvailable() {
+  const cloud = window._storeSettings?.cloudinary_cloud;
+  const preset = window._storeSettings?.cloudinary_preset;
+  const btns = document.querySelectorAll('[id$="-cloudinary-btn"]');
+  btns.forEach(b => b.style.display = (cloud && preset) ? 'block' : 'none');
+}
+
+async function uploadToCloudinary(context) {
+  const cloud  = window._storeSettings?.cloudinary_cloud;
+  const preset = window._storeSettings?.cloudinary_preset;
+  if (!cloud || !preset) {
+    showToast('Configure o Cloudinary em Configurações primeiro.', 'error');
+    navigate('settings');
+    return;
+  }
+
+  const fileInputId = context === 'hero' ? 'hero-img-file' : 'p-img-file';
+  const urlInputId  = context === 'hero' ? 'hero-img-url'  : 'p-img-url';
+  const previewId   = context === 'hero' ? 'hero-img-preview' : 'p-img-preview';
+
+  const input = document.getElementById(fileInputId);
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const btn = document.querySelector(`#${context === 'hero' ? 'hero' : 'p'}-cloudinary-btn button`);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando…'; }
+
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('upload_preset', preset);
+
+      const res  = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/image/upload`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.secure_url) {
+        document.getElementById(urlInputId).value = data.secure_url;
+        const prev = document.getElementById(previewId);
+        if (prev) prev.innerHTML = `<img src="${data.secure_url}" style="width:100%;height:100%;object-fit:cover;border-radius:${context==='hero'?'10px':'0'}"/>`;
+        showToast('Imagem enviada com sucesso! ☁️', 'success');
+      } else {
+        throw new Error(data.error?.message || 'Erro no Cloudinary');
+      }
+    } catch(ex) {
+      showToast('Erro no upload: ' + ex.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '☁️ Fazer upload para Cloudinary'; }
+    }
+  };
+  input.click();
 }
 
 // ═══════════════════════════════════════════════════════════

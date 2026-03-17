@@ -92,6 +92,10 @@ db.exec(`
     details    TEXT,
     created_at DATETIME DEFAULT (datetime('now'))
   );
+  CREATE TABLE IF NOT EXISTS store_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+  );
   CREATE TABLE IF NOT EXISTS site_sections (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     type     TEXT    NOT NULL,
@@ -108,8 +112,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_log      ON audit_log(user_id, created_at);
 `);
 
-// Migração segura: adiciona image_url em produtos se não existir
+// Migrações seguras
 try { db.exec(`ALTER TABLE products ADD COLUMN image_url TEXT`); } catch (_) {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS store_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`); } catch (_) {}
 
 // ─── Seed: produtos ────────────────────────────────────────────────────────────
 const seedProducts = db.prepare(`
@@ -124,6 +129,26 @@ db.transaction(() => {
 })();
 
 // ─── Seed: seções do site ─────────────────────────────────────────────────────
+// ─── Seed: configurações da loja ──────────────────────────────────────────────
+const defaultSettings = [
+  ['store_name',        'GranoVita'],
+  ['store_tagline',     'Granola Artesanal Saudável'],
+  ['store_email',       'oi@granovita.com.br'],
+  ['store_phone',       '+55 11 99999-9999'],
+  ['store_whatsapp',    '5511999999999'],
+  ['store_cnpj',        '00.000.000/0001-00'],
+  ['store_instagram',   'https://www.instagram.com/granovita'],
+  ['store_facebook',    'https://www.facebook.com/granovita'],
+  ['hero_image_url',    ''],
+  ['cloudinary_cloud',  ''],
+  ['cloudinary_preset', ''],
+  ['footer_address',    ''],
+  ['meta_pixel_id',     ''],
+  ['gtm_id',            ''],
+];
+const insSetting = db.prepare(`INSERT OR IGNORE INTO store_settings (key, value) VALUES (?, ?)`);
+db.transaction(() => { defaultSettings.forEach(([k,v]) => insSetting.run(k, v)); })();
+
 const hasSections = db.prepare('SELECT COUNT(*) as n FROM site_sections').get().n;
 if (hasSections === 0) {
   const ins = db.prepare(`INSERT INTO site_sections (type,label,active,position,content) VALUES (?,?,1,?,?)`);

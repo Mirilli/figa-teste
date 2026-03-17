@@ -486,10 +486,41 @@ let products = [];
 //  INICIALIZAÇÃO
 // ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
+  // Carrega configurações e seções em paralelo
+  const [settingsData] = await Promise.allSettled([
+    apiFetch('/api/settings').then(d => { window._settings = d; applySettings(d); }),
+  ]);
   updateAuthUI();
   renderCart();
   await loadSections();
+  routeFromURL();
 });
+
+function applySettings(s) {
+  if (!s) return;
+  // Nome da loja no título
+  if (s.store_name) document.title = s.store_name + ' – ' + (s.store_tagline || 'Granola Artesanal');
+  // Atualiza logo no nav
+  const logos = document.querySelectorAll('.logo');
+  logos.forEach(el => {
+    // Preserva o HTML original se o nome padrão não mudou
+    if (s.store_name && s.store_name !== 'GranoVita') el.textContent = s.store_name;
+  });
+  // Injeta Meta Pixel se configurado
+  if (s.meta_pixel_id && !document.getElementById('meta-pixel')) {
+    const sc = document.createElement('script');
+    sc.id = 'meta-pixel';
+    sc.textContent = `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${s.meta_pixel_id}');fbq('track','PageView');`;
+    document.head.appendChild(sc);
+  }
+  // Injeta GTM se configurado
+  if (s.gtm_id && !document.getElementById('gtm-script')) {
+    const sc = document.createElement('script');
+    sc.id = 'gtm-script';
+    sc.textContent = `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${s.gtm_id}');`;
+    document.head.appendChild(sc);
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 //  CARREGAMENTO DE SEÇÕES DINÂMICAS
@@ -557,11 +588,19 @@ function renderHero(c) {
     </div>
     <div class="hero-visual" aria-hidden="true">
       <div class="hero-visual-bg"></div>
-      <div class="hero-bowl-wrap">
-        <span class="fi fi-1">🫐</span><span class="fi fi-2">🍯</span>
-        <span class="fi fi-3">🥥</span><span class="fi fi-4">🌰</span>
-        <div class="hero-bowl">🥣</div>
-      </div>
+      ${window._settings?.hero_image_url ? `
+        <div style="position:absolute;inset:0;overflow:hidden">
+          <img src="${window._settings.hero_image_url}" alt="Hero"
+            style="width:100%;height:100%;object-fit:cover;opacity:.85"
+            onerror="this.parentNode.innerHTML=defaultHeroBowl()"/>
+        </div>
+      ` : `
+        <div class="hero-bowl-wrap">
+          <span class="fi fi-1">🫐</span><span class="fi fi-2">🍯</span>
+          <span class="fi fi-3">🥥</span><span class="fi fi-4">🌰</span>
+          <div class="hero-bowl">🥣</div>
+        </div>
+      `}
       <div class="badge-spin">
         <svg viewBox="0 0 100 100" width="84" height="84">
           <defs><path id="c" d="M 50,50 m -37,0 a 37,37 0 1,1 74,0 a 37,37 0 1,1 -74,0"/></defs>
@@ -737,12 +776,12 @@ function renderFooter() {
     <div class="container">
       <div class="footer-grid">
         <div class="footer-brand">
-          <div class="logo">Grano<span>Vita</span></div>
+          <div class="logo">${window._settings?.store_name || 'GranoVita'}</div>
           <p>Granolas artesanais feitas com amor e ingredientes naturais selecionados a dedo.</p>
           <div class="footer-socials">
             <a href="#" class="soc" aria-label="Instagram">📸</a>
             <a href="#" class="soc" aria-label="Facebook">👍</a>
-            <a href="https://wa.me/5511999999999" target="_blank" class="soc" aria-label="WhatsApp">💬</a>
+            <a href="${`https://wa.me/${window._settings?.store_whatsapp||'5511999999999'}`}" target="_blank" class="soc" aria-label="WhatsApp">💬</a>
           </div>
         </div>
         <div class="footer-col"><h4>Produtos</h4><ul>
@@ -757,12 +796,12 @@ function renderFooter() {
           <li><a href="#">Trocas e Devoluções</a></li>
         </ul></div>
         <div class="footer-col"><h4>Contato</h4><ul>
-          <li><a href="mailto:oi@granovita.com.br">oi@granovita.com.br</a></li>
+          <li><a href="${`mailto:${window._settings?.store_email||'oi@granovita.com.br'}`}">oi@granovita.com.br</a></li>
           <li><a href="https://wa.me/5511999999999" target="_blank">WhatsApp</a></li>
         </ul></div>
       </div>
       <div class="footer-bottom">
-        <span>© 2025 GranoVita. CNPJ 00.000.000/0001-00</span>
+        <span>© ${new Date().getFullYear()} ${window._settings?.store_name||'GranoVita'}. ${window._settings?.store_cnpj ? 'CNPJ '+window._settings.store_cnpj : ''}</span>
         <div class="pay-icons">
           <span class="pay-icon">💳 Cartão</span>
           <span class="pay-icon">⚡ Pix</span>
@@ -1366,13 +1405,55 @@ async function loadOrders() {
 // ═══════════════════════════════════════════════════════════
 //  NAVEGAÇÃO SPA
 // ═══════════════════════════════════════════════════════════
+const ROUTES = {
+  '/':              { page: 'home' },
+  '/produtos':      { page: 'catalog' },
+  '/meus-pedidos':  { page: 'orders' },
+};
+
 function showPage(name, param) {
   document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
   document.getElementById(`page-${name}`)?.classList.add('active');
   window.scrollTo(0, 0);
+
+  // Atualiza URL sem recarregar a página
+  let url = '/';
+  let title = window._settings?.store_name || 'GranoVita';
+  if (name === 'catalog') { url = '/produtos'; title = `Produtos – ${title}`; }
+  else if (name === 'orders') { url = '/meus-pedidos'; title = `Meus Pedidos – ${title}`; }
+  else if (name === 'product' && param) { url = `/produto/${param}`; }
+
+  history.pushState({ page: name, param }, title, url);
+  document.title = title;
+
   if (name === 'orders')  loadOrders();
   if (name === 'catalog') loadCatalog();
   if (name === 'product') loadProductDetail(param);
+}
+
+// Navega de volta/frente com o botão do browser
+window.addEventListener('popstate', (e) => {
+  const state = e.state || {};
+  const page  = state.page  || 'home';
+  const param = state.param || null;
+  document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+  document.getElementById(`page-${page}`)?.classList.add('active');
+  window.scrollTo(0, 0);
+  if (page === 'orders')  loadOrders();
+  if (page === 'catalog') loadCatalog();
+  if (page === 'product') loadProductDetail(param);
+});
+
+// Roteamento na carga inicial baseado na URL
+function routeFromURL() {
+  const path = window.location.pathname;
+  if (path.startsWith('/produto/')) {
+    const id = parseInt(path.split('/').pop());
+    if (!isNaN(id)) { showPage('product', id); return; }
+  }
+  if (path === '/produtos') { showPage('catalog'); return; }
+  if (path === '/meus-pedidos') { showPage('orders'); return; }
+  // default: home (não chama showPage para não gerar pushState duplo)
 }
 
 // ═══════════════════════════════════════════════════════════
