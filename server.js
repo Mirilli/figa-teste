@@ -16,6 +16,7 @@ const authRoutes     = require('./src/routes/auth');
 const ordersRoutes   = require('./src/routes/orders');
 const paymentsRoutes = require('./src/routes/payments');
 const adminRoutes    = require('./src/routes/admin');
+const sectionsRoutes = require('./src/routes/sections');
 
 const app = express();
 
@@ -76,7 +77,7 @@ const db = require('./src/database');
 
 app.get('/api/products', (req, res) => {
   const products = db.prepare(`
-    SELECT id, sku, name, description, price, stock, weight_g
+    SELECT id, sku, name, description, price, stock, weight_g, image_url
     FROM products WHERE active = 1 ORDER BY id
   `).all();
   res.json(products);
@@ -87,6 +88,7 @@ app.use('/api/auth',     authRoutes);
 app.use('/api/orders',   ordersRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/admin',    adminRoutes);
+app.use('/api/sections', sectionsRoutes);
 
 // ─── Saúde do servidor ────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));

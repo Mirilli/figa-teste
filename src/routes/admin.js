@@ -309,9 +309,9 @@ router.put('/products/:id',
 
     db.prepare(`
       UPDATE products
-      SET name = ?, description = ?, price = ?, stock = ?, weight_g = ?, updated_at = datetime('now')
+      SET name = ?, description = ?, price = ?, stock = ?, weight_g = ?, image_url = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(name, description, price, stock, weight_g, product.id);
+    `).run(name, description, price, stock, weight_g, req.body.image_url || null, product.id);
 
     auditLog(req.user.id, 'product_updated', req, {
       entity: 'product', entityId: product.id,
@@ -345,3 +345,136 @@ router.patch('/products/:id/active',
     return res.json({ message: req.body.active ? 'Produto ativado.' : 'Produto arquivado.', id: product.id });
   }
 );
+
+// ═══════════════════════════════════════════════════════════
+//  SECTIONS CRUD
+// ═══════════════════════════════════════════════════════════
+
+// GET /api/admin/sections — todas as seções (ativas e inativas)
+router.get('/sections', (req, res) => {
+  const sections = db.prepare(`
+    SELECT * FROM site_sections ORDER BY position ASC
+  `).all().map(s => ({ ...s, content: JSON.parse(s.content || '{}') }));
+  return res.json(sections);
+});
+
+// PATCH /api/admin/sections/:id/active — ativar/desativar seção
+router.patch('/sections/:id/active',
+  param('id').isInt(),
+  body('active').isBoolean(),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ error: 'Dados inválidos.' });
+
+    const section = db.prepare('SELECT * FROM site_sections WHERE id = ?').get(req.params.id);
+    if (!section) return res.status(404).json({ error: 'Seção não encontrada.' });
+
+    db.prepare('UPDATE site_sections SET active = ? WHERE id = ?')
+      .run(req.body.active ? 1 : 0, section.id);
+
+    auditLog(req.user.id, 'section_active_changed', req, {
+      entity: 'section', entityId: section.id,
+      details: { label: section.label, active: req.body.active },
+    });
+    return res.json({ message: 'Seção atualizada.' });
+  }
+);
+
+// PATCH /api/admin/sections/:id/position — reordenar seção
+router.patch('/sections/:id/position',
+  param('id').isInt(),
+  body('direction').isIn(['up', 'down']),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ error: 'Dados inválidos.' });
+
+    const all = db.prepare('SELECT * FROM site_sections ORDER BY position ASC').all();
+    const idx = all.findIndex(s => s.id === parseInt(req.params.id));
+    if (idx === -1) return res.status(404).json({ error: 'Seção não encontrada.' });
+
+    const swapIdx = req.body.direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= all.length)
+      return res.status(400).json({ error: 'Não é possível mover nessa direção.' });
+
+    const swap = db.transaction(() => {
+      db.prepare('UPDATE site_sections SET position = ? WHERE id = ?')
+        .run(all[swapIdx].position, all[idx].id);
+      db.prepare('UPDATE site_sections SET position = ? WHERE id = ?')
+        .run(all[idx].position, all[swapIdx].id);
+    });
+    swap();
+
+    auditLog(req.user.id, 'section_reordered', req, {
+      entity: 'section', entityId: all[idx].id,
+    });
+    return res.json({ message: 'Ordem atualizada.' });
+  }
+);
+
+// PUT /api/admin/sections/:id/content — edita conteúdo de uma seção
+router.put('/sections/:id/content',
+  param('id').isInt(),
+  body('content').isObject(),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ error: 'Dados inválidos.' });
+
+    const section = db.prepare('SELECT * FROM site_sections WHERE id = ?').get(req.params.id);
+    if (!section) return res.status(404).json({ error: 'Seção não encontrada.' });
+
+    db.prepare('UPDATE site_sections SET content = ? WHERE id = ?')
+      .run(JSON.stringify(req.body.content), section.id);
+
+    auditLog(req.user.id, 'section_content_updated', req, {
+      entity: 'section', entityId: section.id,
+      details: { label: section.label },
+    });
+    return res.json({ message: 'Conteúdo salvo.' });
+  }
+);
+
+// POST /api/admin/sections — cria seção personalizada (tipo banner)
+router.post('/sections',
+  body('label').trim().isLength({ min: 2 }),
+  body('type').isIn(['banner', 'custom_text']),
+  body('content').isObject(),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array().map(e => e.msg) });
+
+    const maxPos = db.prepare('SELECT MAX(position) as m FROM site_sections').get().m || 0;
+    const result = db.prepare(`
+      INSERT INTO site_sections (type, label, active, position, content)
+      VALUES (?, ?, 1, ?, ?)
+    `).run(req.body.type, req.body.label, maxPos + 1, JSON.stringify(req.body.content));
+
+    auditLog(req.user.id, 'section_created', req, {
+      entity: 'section', entityId: result.lastInsertRowid,
+    });
+    return res.status(201).json(
+      db.prepare('SELECT * FROM site_sections WHERE id = ?').get(result.lastInsertRowid)
+    );
+  }
+);
+
+// DELETE /api/admin/sections/:id — remove seções personalizadas (banner/custom_text)
+router.delete('/sections/:id',
+  param('id').isInt(),
+  (req, res) => {
+    const section = db.prepare('SELECT * FROM site_sections WHERE id = ?').get(req.params.id);
+    if (!section) return res.status(404).json({ error: 'Seção não encontrada.' });
+    if (!['banner','custom_text'].includes(section.type))
+      return res.status(400).json({ error: 'Seções padrão não podem ser excluídas, apenas desativadas.' });
+
+    db.prepare('DELETE FROM site_sections WHERE id = ?').run(section.id);
+    auditLog(req.user.id, 'section_deleted', req, {
+      entity: 'section', entityId: section.id, details: { label: section.label },
+    });
+    return res.json({ message: 'Seção removida.' });
+  }
+);
+
+// ─── Produto com imagem (image_url já é salvo pelo PUT /products/:id) ─────────
+// GET /api/admin/products — já retorna image_url do schema atualizado
+
+module.exports = router;

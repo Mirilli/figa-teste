@@ -202,6 +202,8 @@
       <button class="nav-item" onclick="navigate('products')"><span class="icon">🥣</span>Produtos & Estoque</button>
       <div class="nav-section">Usuários</div>
       <button class="nav-item" onclick="navigate('users')"><span class="icon">👥</span>Clientes</button>
+      <div class="nav-section">Site</div>
+      <button class="nav-item" onclick="navigate('sections')"><span class="icon">🧩</span>Seções do Site</button>
       <div class="nav-section">Segurança</div>
       <button class="nav-item" onclick="navigate('audit')"><span class="icon">🔍</span>Log de Auditoria</button>
     </nav>
@@ -283,6 +285,19 @@
         <input type="number" class="form-input" id="p-stock" min="0" placeholder="0"/>
       </div>
       <div class="form-group" style="grid-column:span 2">
+        <label>Foto do produto</label>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div id="p-img-preview" style="width:80px;height:80px;border-radius:10px;background:var(--surface);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:2rem;flex-shrink:0;overflow:hidden">🥣</div>
+          <div style="flex:1">
+            <input type="file" id="p-img-file" accept="image/*" onchange="previewImage(this)" style="display:none"/>
+            <button type="button" class="action-btn" onclick="document.getElementById('p-img-file').click()" style="margin-bottom:6px;width:100%">📁 Selecionar imagem</button>
+            <input type="text" class="form-input" id="p-img-url" placeholder="ou cole uma URL de imagem" oninput="previewImageUrl(this.value)" style="font-size:.8rem"/>
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px">Upload: máx. 1MB · JPG, PNG, WebP</div>
+          </div>
+        </div>
+        <input type="hidden" id="p-img-data"/>
+      </div>
+      <div class="form-group" style="grid-column:span 2">
         <label>Descrição</label>
         <textarea class="form-input" id="p-desc" rows="3" placeholder="Descreva os ingredientes e diferenciais do produto..." style="resize:vertical;min-height:80px;font-family:'DM Sans',sans-serif"></textarea>
       </div>
@@ -358,12 +373,12 @@ async function adminLogout() {
 // ═══════════════════════════════════════════════════════════
 //  NAVIGATION
 // ═══════════════════════════════════════════════════════════
-const PAGE_TITLES = { dashboard:'Dashboard', orders:'Pedidos', products:'Produtos & Estoque', users:'Clientes', audit:'Log de Auditoria' };
+const PAGE_TITLES = { dashboard:'Dashboard', orders:'Pedidos', products:'Produtos & Estoque', users:'Clientes', sections:'Seções do Site', audit:'Log de Auditoria' };
 
 function navigate(page) {
   currentPage = page;
   document.querySelectorAll('.nav-item').forEach((n,i) => {
-    const pages = ['dashboard','orders','products','users','audit'];
+    const pages = ['dashboard','orders','products','users','sections','audit'];
     n.classList.toggle('active', pages[i] === page);
   });
   document.getElementById('page-title').textContent = PAGE_TITLES[page] || page;
@@ -381,6 +396,7 @@ async function loadPage(page) {
     else if (page === 'products') await renderProducts();
     else if (page === 'users') await renderUsers();
     else if (page === 'audit') await renderAudit();
+    else if (page === 'sections') await renderSections();
   } catch(ex) {
     content.innerHTML = `<p style="color:#EB5757;padding:24px">Erro ao carregar: ${ex.message}</p>`;
   }
@@ -711,6 +727,11 @@ function openProductModal(productId = null) {
     document.getElementById('p-stock').value  = p.stock;
     document.getElementById('p-weight').value = p.weight_g;
     document.getElementById('p-desc').value   = p.description;
+    document.getElementById('p-img-data').value = p.image_url || '';
+    document.getElementById('p-img-url').value  = p.image_url && !p.image_url.startsWith('data:') ? p.image_url : '';
+    const prev = document.getElementById('p-img-preview');
+    if (p.image_url) { prev.innerHTML = `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover"/>`; }
+    else { prev.innerHTML = '🥣'; }
     document.getElementById('pmodal-save').textContent = 'Salvar Alterações';
   } else {
     document.getElementById('pmodal-title').textContent = 'Novo Produto';
@@ -721,7 +742,11 @@ function openProductModal(productId = null) {
     document.getElementById('p-price').value  = '';
     document.getElementById('p-stock').value  = '';
     document.getElementById('p-weight').value = '400';
-    document.getElementById('p-desc').value   = '';
+    document.getElementById('p-desc').value    = '';
+    document.getElementById('p-img-data').value = '';
+    document.getElementById('p-img-url').value  = '';
+    document.getElementById('p-img-file').value = '';
+    document.getElementById('p-img-preview').innerHTML = '🥣';
     document.getElementById('pmodal-save').textContent = 'Criar Produto';
   }
   modal.classList.add('open');
@@ -953,6 +978,413 @@ function showToast(msg, type='') {
   t.textContent = msg; t.className = `toast ${type} show`;
   setTimeout(() => t.classList.remove('show'), 3500);
 }
+
+// ═══════════════════════════════════════════════════════════
+//  IMAGE HELPERS
+// ═══════════════════════════════════════════════════════════
+function previewImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 1.2 * 1024 * 1024) {
+    showToast('Imagem muito grande! Máx. 1MB.', 'error');
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const data = e.target.result;
+    document.getElementById('p-img-data').value = data;
+    document.getElementById('p-img-url').value  = '';
+    document.getElementById('p-img-preview').innerHTML =
+      `<img src="${data}" style="width:100%;height:100%;object-fit:cover"/>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function previewImageUrl(url) {
+  const prev = document.getElementById('p-img-preview');
+  document.getElementById('p-img-data').value = '';
+  if (!url) { prev.innerHTML = '🥣'; return; }
+  prev.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentNode.innerHTML='❌'"/>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SECTIONS
+// ═══════════════════════════════════════════════════════════
+let editingSectionId = null;
+
+const SECTION_ICONS = {
+  hero:'🏠', benefits:'⭐', products:'🥣', kit:'🎁',
+  testimonials:'💬', faq:'❓', newsletter:'📩',
+  banner:'🖼️', custom_text:'📝'
+};
+const SECTION_FIXED = ['hero','benefits','products','kit','testimonials','faq','newsletter'];
+
+async function renderSections() {
+  const sections = await api('/api/admin/sections');
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="font-family:'Playfair Display',serif;color:var(--cream);font-size:1.5rem">Seções do Site</h2>
+        <p style="color:var(--text-muted);font-size:.84rem;margin-top:4px">Ative, desative, reordene e edite o conteúdo de cada seção da loja.</p>
+      </div>
+      <button class="btn-confirm" onclick="openNewSectionModal()" style="padding:10px 20px;font-size:.84rem;border-radius:8px">+ Nova Seção</button>
+    </div>
+
+    <div id="sections-list" style="display:flex;flex-direction:column;gap:14px">
+      ${sections.map((s, idx) => renderSectionCard(s, idx, sections.length)).join('')}
+    </div>
+
+    <div style="margin-top:20px;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:12px">
+      <div style="font-size:.8rem;color:var(--text-muted);line-height:1.6">
+        <strong style="color:var(--caramel)">💡 Dicas:</strong>
+        Seções padrão (Hero, Produtos, etc.) podem ser ativadas/desativadas e ter seu conteúdo editado.
+        Seções personalizadas (Banner, Texto) podem ser criadas, editadas e excluídas.
+        Alterações ficam visíveis na loja imediatamente após salvar.
+      </div>
+    </div>
+  `;
+}
+
+function renderSectionCard(s, idx, total) {
+  const isFixed = SECTION_FIXED.includes(s.type);
+  return `
+    <div style="background:var(--card);border:1px solid ${s.active?'var(--border)':'var(--red-lt)'};border-radius:14px;padding:20px 24px;display:flex;align-items:center;gap:16px;transition:opacity .2s;${!s.active?'opacity:.6':''}">
+      <div style="font-size:1.8rem;width:44px;text-align:center">${SECTION_ICONS[s.type]||'📄'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="color:var(--cream);font-weight:500;font-size:.95rem">${s.label}</div>
+        <div style="color:var(--text-muted);font-size:.76rem;margin-top:2px">
+          Tipo: <code style="color:var(--caramel)">${s.type}</code> · Posição ${s.position + 1}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <!-- Toggle ativo/inativo -->
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;color:var(--text-muted)">
+          <div onclick="toggleSection(${s.id},${s.active})" style="width:40px;height:22px;border-radius:100px;background:${s.active?'var(--green)':'var(--border)'};position:relative;cursor:pointer;transition:background .2s">
+            <div style="position:absolute;top:3px;left:${s.active?'21px':'3px'};width:16px;height:16px;border-radius:50%;background:white;transition:left .2s"></div>
+          </div>
+          ${s.active?'<span style="color:#6FCF97">Ativa</span>':'<span>Inativa</span>'}
+        </label>
+        <!-- Reordenar -->
+        <button class="action-btn" onclick="moveSection(${s.id},'up')" ${idx===0?'disabled':''} title="Mover para cima">↑</button>
+        <button class="action-btn" onclick="moveSection(${s.id},'down')" ${idx===total-1?'disabled':''} title="Mover para baixo">↓</button>
+        <!-- Editar conteúdo (não disponível para 'products') -->
+        ${s.type !== 'products'
+          ? `<button class="action-btn" onclick="openEditSection(${s.id})">✏️ Editar</button>`
+          : `<span style="font-size:.76rem;color:var(--text-muted)">Auto</span>`}
+        <!-- Deletar (só personalizadas) -->
+        ${!isFixed ? `<button class="action-btn danger" onclick="deleteSectionConfirm(${s.id},'${s.label.replace(/'/g,"\'")}')">🗑️</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+async function toggleSection(id, currentActive) {
+  try {
+    await api(`/api/admin/sections/${id}/active`, 'PATCH', { active: !currentActive });
+    showToast(currentActive ? 'Seção desativada.' : 'Seção ativada!', currentActive ? '' : 'success');
+    await renderSections();
+  } catch(ex) { showToast('Erro: '+ex.message,'error'); }
+}
+
+async function moveSection(id, direction) {
+  try {
+    await api(`/api/admin/sections/${id}/position`, 'PATCH', { direction });
+    await renderSections();
+  } catch(ex) { showToast('Erro: '+ex.message,'error'); }
+}
+
+async function deleteSectionConfirm(id, label) {
+  if (!confirm(`Remover a seção "${label}"?`)) return;
+  try {
+    await api(`/api/admin/sections/${id}`, 'DELETE');
+    showToast('Seção removida.', 'success');
+    await renderSections();
+  } catch(ex) { showToast('Erro: '+ex.message,'error'); }
+}
+
+// ── Editor de conteúdo de seção ───────────────────────────────────────────────
+function openEditSection(id) {
+  const allSections = document.querySelectorAll('#sections-list > div');
+  // Get from API cache in window
+  const sections = window._sectionsCache || [];
+  const section = sections.find(s => s.id === id);
+  if (!section) { renderSections().then(() => openEditSection(id)); return; }
+  editingSectionId = id;
+  showSectionEditor(section);
+}
+
+async function renderSections() {
+  const sections = await api('/api/admin/sections');
+  window._sectionsCache = sections;
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="font-family:'Playfair Display',serif;color:var(--cream);font-size:1.5rem">Seções do Site</h2>
+        <p style="color:var(--text-muted);font-size:.84rem;margin-top:4px">Ative, desative, reordene e edite o conteúdo de cada seção da loja.</p>
+      </div>
+      <button class="btn-confirm" onclick="openNewSectionModal()" style="padding:10px 20px;font-size:.84rem;border-radius:8px">+ Nova Seção</button>
+    </div>
+    <div id="sections-list" style="display:flex;flex-direction:column;gap:14px">
+      ${sections.map((s, idx) => renderSectionCard(s, idx, sections.length)).join('')}
+    </div>
+    <div style="margin-top:20px;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:12px">
+      <div style="font-size:.8rem;color:var(--text-muted);line-height:1.6">
+        <strong style="color:var(--caramel)">💡 Dicas:</strong>
+        Seções padrão podem ser ativadas/desativadas e ter seu conteúdo editado.
+        Seções personalizadas (Banner, Texto) podem ser criadas, editadas e excluídas.
+        Alterações ficam visíveis na loja imediatamente.
+      </div>
+    </div>
+  `;
+}
+
+function openEditSection(id) {
+  const section = (window._sectionsCache || []).find(s => s.id === id);
+  if (!section) return;
+  editingSectionId = id;
+  showSectionEditor(section);
+}
+
+function showSectionEditor(section) {
+  const modal = document.getElementById('section-editor-modal');
+  document.getElementById('sedit-title').textContent = `Editar: ${section.label}`;
+  document.getElementById('sedit-error').textContent = '';
+
+  const formEl = document.getElementById('sedit-form');
+  formEl.innerHTML = buildSectionForm(section.type, section.content);
+  modal.classList.add('open');
+}
+
+function buildSectionForm(type, content) {
+  const tf = (id, label, val, multiline=false) => `
+    <div class="form-group">
+      <label>${label}</label>
+      ${multiline
+        ? `<textarea class="form-input" id="sf-${id}" rows="2" style="font-family:'DM Sans',sans-serif">${val||''}</textarea>`
+        : `<input type="text" class="form-input" id="sf-${id}" value="${(val||'').replace(/"/g,'&quot;')}"/>`}
+    </div>`;
+
+  if (type === 'hero') return `
+    ${tf('tag','Tag (ex: 🌿 100% Natural)', content.tag)}
+    ${tf('title','Título (use \n para quebrar linha)', content.title, true)}
+    ${tf('subtitle','Subtítulo', content.subtitle, true)}
+    ${tf('cta1_text','Botão 1 - Texto', content.cta1_text)}
+    ${tf('cta1_url','Botão 1 - URL', content.cta1_url)}
+    ${tf('cta2_text','Botão 2 - Texto', content.cta2_text)}
+    ${tf('cta2_url','Botão 2 - URL', content.cta2_url)}
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      ${tf('s1n','Stat 1 - Número', content.stat1_num)}
+      ${tf('s2n','Stat 2 - Número', content.stat2_num)}
+      ${tf('s3n','Stat 3 - Número', content.stat3_num)}
+      ${tf('s1l','Stat 1 - Label', content.stat1_label)}
+      ${tf('s2l','Stat 2 - Label', content.stat2_label)}
+      ${tf('s3l','Stat 3 - Label', content.stat3_label)}
+    </div>`;
+
+  if (type === 'benefits') {
+    const items = content.items || [];
+    return items.map((item, i) => `
+      <div style="padding:14px;background:var(--surface);border-radius:10px;margin-bottom:10px">
+        <div style="color:var(--caramel);font-size:.78rem;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">Benefício ${i+1}</div>
+        <div style="display:grid;grid-template-columns:80px 1fr;gap:10px">
+          ${tf(`ben${i}icon`,'Ícone', item.icon)}
+          ${tf(`ben${i}title`,'Título', item.title)}
+        </div>
+        ${tf(`ben${i}desc`,'Descrição', item.desc)}
+      </div>`).join('');
+  }
+
+  if (type === 'products') return `
+    ${tf('tag','Tag', content.tag)}
+    ${tf('title','Título', content.title)}
+    ${tf('subtitle','Subtítulo', content.subtitle, true)}`;
+
+  if (type === 'kit') return `
+    ${tf('tag','Tag', content.tag)}
+    ${tf('title','Título', content.title)}
+    ${tf('desc','Descrição', content.desc, true)}
+    ${tf('old_price','Preço antigo (ex: R$ 107,70)', content.old_price)}
+    ${tf('new_price','Preço novo (ex: R$ 89,90)', content.new_price)}
+    ${tf('discount','Badge desconto (ex: -17% OFF)', content.discount)}
+    ${tf('cta','Texto do botão', content.cta)}
+    <div style="color:var(--text-muted);font-size:.78rem;margin-top:4px">Itens da lista:</div>
+    ${(content.items||[]).map((item,i)=>tf(`kititem${i}`,'',item)).join('')}`;
+
+  if (type === 'testimonials') {
+    const items = content.items || [];
+    return items.map((item, i) => `
+      <div style="padding:14px;background:var(--surface);border-radius:10px;margin-bottom:10px">
+        <div style="color:var(--caramel);font-size:.78rem;font-weight:600;margin-bottom:10px;text-transform:uppercase">Depoimento ${i+1}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${tf(`tm${i}name`,'Nome', item.name)}
+          ${tf(`tm${i}loc`,'Cidade', item.location)}
+          ${tf(`tm${i}av`,'Avatar (emoji)', item.avatar)}
+          ${tf(`tm${i}stars`,'Estrelas (1-5)', item.stars)}
+        </div>
+        ${tf(`tm${i}text`,'Texto do depoimento', item.text, true)}
+      </div>`).join('');
+  }
+
+  if (type === 'faq') {
+    const items = content.items || [];
+    return items.map((item, i) => `
+      <div style="padding:14px;background:var(--surface);border-radius:10px;margin-bottom:10px">
+        <div style="color:var(--caramel);font-size:.78rem;font-weight:600;margin-bottom:10px;text-transform:uppercase">Pergunta ${i+1}</div>
+        ${tf(`faq${i}q`,'Pergunta', item.q)}
+        ${tf(`faq${i}a`,'Resposta', item.a, true)}
+      </div>`).join('');
+  }
+
+  if (type === 'newsletter') return `
+    ${tf('title','Título', content.title)}
+    ${tf('subtitle','Subtítulo', content.subtitle)}`;
+
+  if (type === 'banner') return `
+    ${tf('title','Título', content.title)}
+    ${tf('subtitle','Subtítulo', content.subtitle, true)}
+    ${tf('cta_text','Texto do botão', content.cta_text)}
+    ${tf('cta_url','URL do botão', content.cta_url)}
+    <div class="form-group">
+      <label>Cor de fundo</label>
+      <input type="color" class="form-input" id="sf-bg_color" value="${content.bg_color||'#7A4F2B'}" style="height:44px;padding:4px"/>
+    </div>`;
+
+  if (type === 'custom_text') return `
+    ${tf('title','Título (opcional)', content.title)}
+    ${tf('text','Conteúdo do texto', content.text, true)}`;
+
+  return '<p style="color:var(--text-muted)">Este tipo de seção não possui editor de conteúdo.</p>';
+}
+
+function collectSectionContent(type, content) {
+  const v = (id) => { const el = document.getElementById(`sf-${id}`); return el ? el.value : ''; };
+  if (type === 'hero') return {
+    tag: v('tag'), title: v('title'), subtitle: v('subtitle'),
+    cta1_text: v('cta1_text'), cta1_url: v('cta1_url'),
+    cta2_text: v('cta2_text'), cta2_url: v('cta2_url'),
+    stat1_num: v('s1n'), stat1_label: v('s1l'),
+    stat2_num: v('s2n'), stat2_label: v('s2l'),
+    stat3_num: v('s3n'), stat3_label: v('s3l'),
+  };
+  if (type === 'benefits') return { items: (content.items||[]).map((_,i) => ({
+    icon: v(`ben${i}icon`), title: v(`ben${i}title`), desc: v(`ben${i}desc`)
+  }))};
+  if (type === 'products') return { tag: v('tag'), title: v('title'), subtitle: v('subtitle') };
+  if (type === 'kit') return {
+    tag: v('tag'), title: v('title'), desc: v('desc'),
+    old_price: v('old_price'), new_price: v('new_price'), discount: v('discount'), cta: v('cta'),
+    items: (content.items||[]).map((_,i) => v(`kititem${i}`)),
+  };
+  if (type === 'testimonials') return { items: (content.items||[]).map((_,i) => ({
+    name: v(`tm${i}name`), location: v(`tm${i}loc`),
+    avatar: v(`tm${i}av`), stars: parseInt(v(`tm${i}stars`))||5,
+    text: v(`tm${i}text`),
+  }))};
+  if (type === 'faq') return { items: (content.items||[]).map((_,i) => ({
+    q: v(`faq${i}q`), a: v(`faq${i}a`)
+  }))};
+  if (type === 'newsletter') return { title: v('title'), subtitle: v('subtitle') };
+  if (type === 'banner') return {
+    title: v('title'), subtitle: v('subtitle'),
+    cta_text: v('cta_text'), cta_url: v('cta_url'), bg_color: v('bg_color'),
+  };
+  if (type === 'custom_text') return { title: v('title'), text: v('text') };
+  return {};
+}
+
+async function saveSectionContent() {
+  const btn = document.getElementById('sedit-save');
+  const err = document.getElementById('sedit-error');
+  btn.disabled = true; btn.textContent = 'Salvando…'; err.textContent = '';
+
+  const section = (window._sectionsCache||[]).find(s => s.id === editingSectionId);
+  if (!section) { btn.disabled=false; btn.textContent='Salvar'; return; }
+
+  try {
+    const newContent = collectSectionContent(section.type, section.content);
+    await api(`/api/admin/sections/${editingSectionId}/content`, 'PUT', { content: newContent });
+    document.getElementById('section-editor-modal').classList.remove('open');
+    showToast('Seção atualizada! Visível na loja.', 'success');
+    await renderSections();
+  } catch(ex) {
+    err.textContent = ex.message || 'Erro ao salvar.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar';
+  }
+}
+
+// ── Nova seção personalizada ───────────────────────────────────────────────────
+function openNewSectionModal() {
+  document.getElementById('nsec-error').textContent = '';
+  document.getElementById('nsec-label').value = '';
+  document.getElementById('nsec-type').value = 'banner';
+  document.getElementById('new-section-modal').classList.add('open');
+}
+
+async function createNewSection() {
+  const btn = document.getElementById('nsec-save');
+  const err = document.getElementById('nsec-error');
+  const label = document.getElementById('nsec-label').value.trim();
+  const type  = document.getElementById('nsec-type').value;
+  if (!label) { err.textContent = 'Informe um nome para a seção.'; return; }
+
+  const defaults = {
+    banner: { title:'Título da Seção', subtitle:'Subtítulo da seção personalizada.', cta_text:'Ver mais', cta_url:'#produtos', bg_color:'#7A4F2B' },
+    custom_text: { title:'Título', text:'Conteúdo da seção personalizada.' },
+  };
+
+  btn.disabled = true; btn.textContent = 'Criando…';
+  try {
+    await api('/api/admin/sections', 'POST', { label, type, content: defaults[type]||{} });
+    document.getElementById('new-section-modal').classList.remove('open');
+    showToast('Seção criada!', 'success');
+    await renderSections();
+  } catch(ex) {
+    err.textContent = ex.message || 'Erro.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Criar Seção';
+  }
+}
 </script>
+<!-- SECTION EDITOR MODAL -->
+<div class="modal-overlay" id="section-editor-modal">
+  <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
+    <h3 id="sedit-title">Editar Seção</h3>
+    <p style="color:var(--text-muted);font-size:.84rem;margin-bottom:20px">Edite o conteúdo desta seção. As alterações ficam visíveis na loja imediatamente.</p>
+    <div id="sedit-form"></div>
+    <div class="form-error" id="sedit-error" style="margin:10px 0"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="document.getElementById('section-editor-modal').classList.remove('open')">Cancelar</button>
+      <button class="btn-confirm" id="sedit-save" onclick="saveSectionContent()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW SECTION MODAL -->
+<div class="modal-overlay" id="new-section-modal">
+  <div class="modal" style="max-width:400px">
+    <h3>Nova Seção Personalizada</h3>
+    <p>Adicione um banner ou bloco de texto ao site.</p>
+    <div class="form-group">
+      <label>Nome da seção</label>
+      <input type="text" class="form-input" id="nsec-label" placeholder="Ex: Promoção de Verão"/>
+    </div>
+    <div class="form-group">
+      <label>Tipo</label>
+      <select class="form-input" id="nsec-type" style="background:var(--surface);border-color:var(--border);color:var(--text)">
+        <option value="banner">🖼️ Banner (título + texto + botão + cor de fundo)</option>
+        <option value="custom_text">📝 Texto livre (título + parágrafo)</option>
+      </select>
+    </div>
+    <div class="form-error" id="nsec-error" style="margin:8px 0"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="document.getElementById('new-section-modal').classList.remove('open')">Cancelar</button>
+      <button class="btn-confirm" id="nsec-save" onclick="createNewSection()">Criar Seção</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
