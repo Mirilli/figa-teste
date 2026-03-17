@@ -41,6 +41,7 @@ app.use(helmet({
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'", 'https://api.mercadopago.com'],
       frameSrc: ['https://sdk.mercadopago.com'],
+      scriptSrcAttr: ["'unsafe-hashes'", "'unsafe-inline'"],
     },
   },
   crossOriginEmbedderPolicy: false,
