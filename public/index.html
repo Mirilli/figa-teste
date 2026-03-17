@@ -470,7 +470,7 @@
 </div>
 
 <!-- WHATSAPP -->
-<a href="https://wa.me/5511999999999?text=Olá!%20Quero%20fazer%20um%20pedido%20🌾" target="_blank" class="wa-float" aria-label="WhatsApp">💬</a>
+<a id="wa-float-btn" href="https://wa.me/5511999999999?text=Olá!%20Quero%20fazer%20um%20pedido%20🌾" target="_blank" class="wa-float" aria-label="WhatsApp">💬</a>
 
 <script>
 // ═══════════════════════════════════════════════════════════
@@ -498,14 +498,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function applySettings(s) {
   if (!s) return;
-  // Nome da loja no título
+  // Título da página
   if (s.store_name) document.title = s.store_name + ' – ' + (s.store_tagline || 'Granola Artesanal');
-  // Atualiza logo no nav
-  const logos = document.querySelectorAll('.logo');
-  logos.forEach(el => {
-    // Preserva o HTML original se o nome padrão não mudou
-    if (s.store_name && s.store_name !== 'GranoVita') el.textContent = s.store_name;
-  });
+  // Logo na nav (preserva span de cor se for GranoVita)
+  const navLogo = document.querySelector('a.logo');
+  if (navLogo && s.store_name) navLogo.textContent = s.store_name;
+  // Botão WhatsApp flutuante
+  const waBtn = document.getElementById('wa-float-btn');
+  if (waBtn && s.store_whatsapp) {
+    waBtn.href = `https://wa.me/${s.store_whatsapp}?text=Olá!%20Quero%20fazer%20um%20pedido%20🌾`;
+  }
   // Injeta Meta Pixel se configurado
   if (s.meta_pixel_id && !document.getElementById('meta-pixel')) {
     const sc = document.createElement('script');
@@ -590,9 +592,14 @@ function renderHero(c) {
       <div class="hero-visual-bg"></div>
       ${window._settings?.hero_image_url ? `
         <div style="position:absolute;inset:0;overflow:hidden">
-          <img src="${window._settings.hero_image_url}" alt="Hero"
-            style="width:100%;height:100%;object-fit:cover;opacity:.85"
-            onerror="this.parentNode.innerHTML=defaultHeroBowl()"/>
+          <img src="${window._settings.hero_image_url}" alt="${window._settings?.store_name || 'GranoVita'}"
+            style="width:100%;height:100%;object-fit:cover;opacity:.88"
+            onerror="this.parentNode.style.display='none';document.getElementById('hero-bowl-fallback').style.display='flex'"/>
+        </div>
+        <div id="hero-bowl-fallback" class="hero-bowl-wrap" style="display:none">
+          <span class="fi fi-1">🫐</span><span class="fi fi-2">🍯</span>
+          <span class="fi fi-3">🥥</span><span class="fi fi-4">🌰</span>
+          <div class="hero-bowl">🥣</div>
         </div>
       ` : `
         <div class="hero-bowl-wrap">
@@ -771,37 +778,45 @@ function renderFallbackSections() {
 }
 
 function renderFooter() {
+  const s   = window._settings || {};
+  const wa  = s.store_whatsapp || '5511999999999';
+  const em  = s.store_email    || 'oi@granovita.com.br';
+  const ig  = s.store_instagram || '#';
+  const fb  = s.store_facebook  || '#';
+  const nm  = s.store_name     || 'GranoVita';
+  const cnpj = s.store_cnpj ? `CNPJ ${s.store_cnpj}` : '';
+  const addr = s.footer_address || '';
   return `
   <footer>
     <div class="container">
       <div class="footer-grid">
         <div class="footer-brand">
-          <div class="logo">${window._settings?.store_name || 'GranoVita'}</div>
+          <div class="logo">${nm}</div>
           <p>Granolas artesanais feitas com amor e ingredientes naturais selecionados a dedo.</p>
+          ${addr ? `<p style="font-size:.78rem;color:#5A4535;margin-top:6px">${addr}</p>` : ''}
           <div class="footer-socials">
-            <a href="#" class="soc" aria-label="Instagram">📸</a>
-            <a href="#" class="soc" aria-label="Facebook">👍</a>
-            <a href="${`https://wa.me/${window._settings?.store_whatsapp||'5511999999999'}`}" target="_blank" class="soc" aria-label="WhatsApp">💬</a>
+            <a href="${ig}" target="_blank" class="soc" aria-label="Instagram" title="Instagram">📸</a>
+            <a href="${fb}" target="_blank" class="soc" aria-label="Facebook" title="Facebook">👍</a>
+            <a href="https://wa.me/${wa}" target="_blank" class="soc" aria-label="WhatsApp">💬</a>
           </div>
         </div>
         <div class="footer-col"><h4>Produtos</h4><ul>
-          <li><a href="#produtos">Granola Clássica</a></li>
-          <li><a href="#produtos">Granola Tropical</a></li>
-          <li><a href="#produtos">Granola Dark</a></li>
-          <li><a href="#kit">Kit Família</a></li>
+          <li><a href="/produtos" onclick="showPage('catalog');return false">Ver todos</a></li>
+          <li><a href="/produtos" onclick="showPage('catalog');return false">Granolas individuais</a></li>
+          <li><a href="/produtos" onclick="showPage('catalog');return false">Kits</a></li>
         </ul></div>
         <div class="footer-col"><h4>Informações</h4><ul>
-          <li><a href="#faq">FAQ</a></li>
+          <li><a href="/" onclick="showPage('home');document.querySelector('#faq') && document.querySelector('#faq').scrollIntoView();return false">FAQ</a></li>
           <li><a href="#">Política de Entrega</a></li>
           <li><a href="#">Trocas e Devoluções</a></li>
         </ul></div>
         <div class="footer-col"><h4>Contato</h4><ul>
-          <li><a href="${`mailto:${window._settings?.store_email||'oi@granovita.com.br'}`}">oi@granovita.com.br</a></li>
-          <li><a href="https://wa.me/5511999999999" target="_blank">WhatsApp</a></li>
+          <li><a href="mailto:${em}">${em}</a></li>
+          <li><a href="https://wa.me/${wa}" target="_blank">${s.store_phone || 'WhatsApp'}</a></li>
         </ul></div>
       </div>
       <div class="footer-bottom">
-        <span>© ${new Date().getFullYear()} ${window._settings?.store_name||'GranoVita'}. ${window._settings?.store_cnpj ? 'CNPJ '+window._settings.store_cnpj : ''}</span>
+        <span>© ${new Date().getFullYear()} ${nm}. ${cnpj}</span>
         <div class="pay-icons">
           <span class="pay-icon">💳 Cartão</span>
           <span class="pay-icon">⚡ Pix</span>
@@ -848,6 +863,7 @@ let catalogFilter = 'all';
 async function loadCatalog() {
   const el = document.getElementById('catalog-content');
   el.innerHTML = '<div style="padding:80px;text-align:center;color:#8B7060">Carregando…</div>';
+  document.title = 'Produtos – ' + (window._settings?.store_name || 'GranoVita');
 
   try {
     if (!products.length) {
@@ -958,6 +974,10 @@ async function loadProductDetail(productId) {
     const product = products.find(p => p.id === productId);
     if (!product) { el.innerHTML = '<div style="padding:80px;text-align:center;color:var(--error)">Produto não encontrado.</div>'; return; }
     detailQty = 1;
+    // Update page title and URL with product name for tracking
+    const storeName = window._settings?.store_name || 'GranoVita';
+    document.title = product.name + ' – ' + storeName;
+    history.replaceState({ page: 'product', param: productId }, document.title, '/produto/' + productId);
     renderProductDetail(product);
   } catch {
     el.innerHTML = '<div style="padding:80px;text-align:center;color:var(--error)">Erro ao carregar produto.</div>';
@@ -1031,7 +1051,7 @@ function renderProductDetail(p) {
             </button>
           ` : `<div style="padding:16px;background:#F8D7DA;border-radius:10px;color:#721C24;font-size:.9rem;margin-bottom:16px">😔 Produto temporariamente esgotado</div>`}
 
-          <a href="https://wa.me/5511999999999?text=Olá!%20Tenho%20interesse%20no%20produto:%20${encodeURIComponent(p.name)}"
+          <a href="${`https://wa.me/${window._settings?.store_whatsapp||'5511999999999'}?text=${encodeURIComponent('Olá! Tenho interesse no produto: '+p.name)}`}"
             target="_blank" class="btn btn-whatsapp" style="width:100%;justify-content:center;border-radius:12px;padding:14px">
             💬 Perguntar pelo WhatsApp
           </a>
