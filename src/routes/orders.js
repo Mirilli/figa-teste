@@ -1,9 +1,9 @@
 'use strict';
 
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 
-const { query, withTransaction }             = require('../database');
+const db = require('../database');
 const { requireAuth }                        = require('../middleware/auth');
 const { generateOrderHash, auditLog }        = require('../middleware/security');
 
@@ -12,54 +12,66 @@ const router = express.Router();
 const SHIPPING_COST       = parseFloat(process.env.SHIPPING_COST) || 15.90;
 const FREE_SHIPPING_LIMIT = parseFloat(process.env.FREE_SHIPPING_THRESHOLD) || 100;
 
-// ── GET /api/orders ───────────────────────────────────────────────────────────
-router.get('/', requireAuth, async (req, res) => {
-  const result = await query(
-    `SELECT o.id, o.status, o.subtotal::float, o.shipping_cost::float, o.total::float,
-            o.mp_payment_id, o.paid_at, o.shipped_at, o.delivered_at, o.created_at,
-            COALESCE(
-              json_agg(json_build_object(
-                'name', oi.product_name, 'sku', oi.product_sku,
-                'qty', oi.quantity, 'unit_price', oi.unit_price::float,
-                'subtotal', oi.subtotal::float
-              )) FILTER (WHERE oi.id IS NOT NULL),
-              '[]'
-            ) AS items
-     FROM orders o
-     LEFT JOIN order_items oi ON oi.order_id = o.id
-     WHERE o.user_id = $1
-     GROUP BY o.id
-     ORDER BY o.created_at DESC
-     LIMIT 50`,
-    [req.user.id]
-  );
-  return res.json(result.rows);
+// ─── GET /api/orders — lista pedidos do usuário logado ────────────────────────
+router.get('/', requireAuth, (req, res) => {
+  const orders = db.prepare(`
+    SELECT
+      o.id, o.status, o.subtotal, o.shipping_cost, o.total,
+      o.mp_payment_id, o.paid_at, o.shipped_at, o.delivered_at, o.created_at,
+      (
+        SELECT json_group_array(json_object(
+          'name', oi.product_name,
+          'sku',  oi.product_sku,
+          'qty',  oi.quantity,
+          'unit_price', oi.unit_price,
+          'subtotal',   oi.subtotal
+        ))
+        FROM order_items oi WHERE oi.order_id = o.id
+      ) AS items_json
+    FROM orders o
+    WHERE o.user_id = ?
+    ORDER BY o.created_at DESC
+    LIMIT 50
+  `).all(req.user.id);
+
+  const result = orders.map(o => ({
+    ...o,
+    items: JSON.parse(o.items_json || '[]'),
+    items_json: undefined,
+  }));
+
+  return res.json(result);
 });
 
-// ── GET /api/orders/:id ───────────────────────────────────────────────────────
-router.get('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
-  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido.' });
+// ─── GET /api/orders/:id — detalhe de um pedido ───────────────────────────────
+router.get('/:id', requireAuth, param('id').isInt(), (req, res) => {
+  const order = db.prepare(`
+    SELECT o.*, u.name AS customer_name, u.email AS customer_email
+    FROM orders o
+    JOIN users u ON u.id = o.user_id
+    WHERE o.id = ? AND (o.user_id = ? OR ? = 'admin')
+  `).get(req.params.id, req.user.id, req.user.role);
 
-  const orderRes = await query(
-    `SELECT o.*, u.name AS customer_name, u.email AS customer_email
-     FROM orders o JOIN users u ON u.id = o.user_id
-     WHERE o.id = $1 AND (o.user_id = $2 OR $3 = 'admin')`,
-    [id, req.user.id, req.user.role]
-  );
-  if (!orderRes.rows.length) return res.status(404).json({ error: 'Pedido não encontrado.' });
+  if (!order) return res.status(404).json({ error: 'Pedido não encontrado.' });
 
-  const order = orderRes.rows[0];
-  const itemsRes = await query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+  const items = db.prepare(`
+    SELECT * FROM order_items WHERE order_id = ?
+  `).all(order.id);
+
+  // Oculta dados sensíveis de endereço para outros usuários que não sejam admin
+  if (req.user.role !== 'admin' && order.user_id !== req.user.id) {
+    return res.status(403).json({ error: 'Acesso negado.' });
+  }
+
   const { integrity_hash, ...safeOrder } = order;
-  return res.json({ ...safeOrder, items: itemsRes.rows });
+  return res.json({ ...safeOrder, items });
 });
 
-// ── POST /api/orders ──────────────────────────────────────────────────────────
+// ─── POST /api/orders — cria novo pedido ─────────────────────────────────────
 router.post('/',
   requireAuth,
   [
-    body('items').isArray({ min: 1 }),
+    body('items').isArray({ min: 1 }).withMessage('Carrinho vazio.'),
     body('items.*.productId').isInt({ min: 1 }),
     body('items.*.quantity').isInt({ min: 1, max: 20 }),
     body('shipping').isObject(),
@@ -70,93 +82,114 @@ router.post('/',
     body('shipping.state').trim().isLength({ min: 2 }),
     body('shipping.zip').trim().matches(/^\d{5}-?\d{3}$/),
   ],
-  async (req, res) => {
+  (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array().map(e => e.msg) });
+    if (!errors.isEmpty()) {
+      return res.status(422).json({ errors: errors.array().map(e => e.msg) });
+    }
 
     const { items: requestedItems, shipping } = req.body;
 
     try {
-      const orderId = await withTransaction(async (client) => {
-        // 1. Valida produtos e estoque
-        const enriched = [];
-        for (const item of requestedItems) {
-          const pRes = await client.query(
-            'SELECT * FROM products WHERE id = $1 AND active = TRUE', [item.productId]
-          );
-          const product = pRes.rows[0];
-          if (!product) throw Object.assign(new Error(`Produto ID ${item.productId} não encontrado.`), { status: 400 });
-          if (product.stock < item.quantity) throw Object.assign(
-            new Error(`Estoque insuficiente para "${product.name}". Disponível: ${product.stock}.`), { status: 409 }
-          );
-          enriched.push({
-            productId: product.id, productSku: product.sku, productName: product.name,
-            unitPrice: parseFloat(product.price),
-            quantity: item.quantity,
-            subtotal: +(parseFloat(product.price) * item.quantity).toFixed(2),
+      // ── 1. Busca produtos e valida estoque ──────────────────────────────
+      const enriched = [];
+      for (const item of requestedItems) {
+        const product = db.prepare(`
+          SELECT * FROM products WHERE id = ? AND active = 1
+        `).get(item.productId);
+
+        if (!product) {
+          return res.status(400).json({ error: `Produto ID ${item.productId} não encontrado.` });
+        }
+        if (product.stock < item.quantity) {
+          return res.status(409).json({
+            error: `Estoque insuficiente para "${product.name}". Disponível: ${product.stock}.`,
           });
         }
+        enriched.push({
+          productId: product.id,
+          productSku: product.sku,
+          productName: product.name,
+          unitPrice: product.price,   // ← preço REAL do banco, nunca do cliente
+          quantity: item.quantity,
+          subtotal: +(product.price * item.quantity).toFixed(2),
+        });
+      }
 
-        // 2. Calcula totais (no servidor)
-        const subtotal     = +enriched.reduce((s, i) => s + i.subtotal, 0).toFixed(2);
-        const shippingCost = subtotal >= FREE_SHIPPING_LIMIT ? 0 : SHIPPING_COST;
-        const total        = +(subtotal + shippingCost).toFixed(2);
+      // ── 2. Calcula totais no servidor ────────────────────────────────────
+      const subtotal = +enriched.reduce((s, i) => s + i.subtotal, 0).toFixed(2);
+      const shippingCost = subtotal >= FREE_SHIPPING_LIMIT ? 0 : SHIPPING_COST;
+      const total = +(subtotal + shippingCost).toFixed(2);
 
-        // 3. Decrementa estoque atomicamente
+      // ── 3. Persiste pedido em transação atômica ──────────────────────────
+      const createOrder = db.transaction(() => {
+        // Decrementa estoque
         for (const item of enriched) {
-          const upd = await client.query(
-            'UPDATE products SET stock = stock - $1 WHERE id = $2 AND stock >= $1 RETURNING id',
-            [item.quantity, item.productId]
-          );
-          if (!upd.rows.length) throw Object.assign(new Error(`Estoque insuficiente para produto ID ${item.productId}.`), { status: 409 });
+          db.prepare(`
+            UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?
+          `).run(item.quantity, item.productId, item.quantity);
         }
 
-        // 4. Gera hash de integridade
+        // Gera hash de integridade ANTES de inserir
         const integrityHash = generateOrderHash({
           userId: req.user.id,
-          items: enriched.map(i => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice })),
+          items: enriched.map(i => ({
+            productId: i.productId,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+          })),
           total,
         });
 
-        // 5. Insere pedido
-        const orderRes = await client.query(
-          `INSERT INTO orders
-             (user_id, status, subtotal, shipping_cost, total, integrity_hash,
-              shipping_name, shipping_phone, shipping_address)
-           VALUES ($1,'awaiting_payment',$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-          [
-            req.user.id, subtotal, shippingCost, total, integrityHash,
-            shipping.name, shipping.phone,
-            JSON.stringify({ address: shipping.address, number: shipping.number||'',
-              complement: shipping.complement||'', city: shipping.city,
-              state: shipping.state, zip: shipping.zip }),
-          ]
+        const orderResult = db.prepare(`
+          INSERT INTO orders
+            (user_id, status, subtotal, shipping_cost, total, integrity_hash,
+             shipping_name, shipping_phone, shipping_address)
+          VALUES (?, 'awaiting_payment', ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          req.user.id, subtotal, shippingCost, total, integrityHash,
+          shipping.name, shipping.phone,
+          JSON.stringify({
+            address: shipping.address,
+            number: shipping.number || '',
+            complement: shipping.complement || '',
+            neighborhood: shipping.neighborhood || '',
+            city: shipping.city,
+            state: shipping.state,
+            zip: shipping.zip,
+          })
         );
-        const newOrderId = orderRes.rows[0].id;
 
-        // 6. Insere itens
+        const orderId = orderResult.lastInsertRowid;
+        const insertItem = db.prepare(`
+          INSERT INTO order_items
+            (order_id, product_id, product_sku, product_name, unit_price, quantity, subtotal)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
         for (const item of enriched) {
-          await client.query(
-            `INSERT INTO order_items
-               (order_id, product_id, product_sku, product_name, unit_price, quantity, subtotal)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [newOrderId, item.productId, item.productSku, item.productName,
-             item.unitPrice, item.quantity, item.subtotal]
+          insertItem.run(
+            orderId, item.productId, item.productSku, item.productName,
+            item.unitPrice, item.quantity, item.subtotal
           );
         }
-        return newOrderId;
+
+        return orderId;
       });
 
-      await auditLog(req.user.id, 'order_created', req, { entity: 'order', entityId: orderId });
+      const orderId = createOrder();
+      auditLog(req.user.id, 'order_created', req, { entity: 'order', entityId: orderId });
 
-      // Busca totais para retornar
-      const oRes = await query('SELECT subtotal::float, shipping_cost::float, total::float FROM orders WHERE id = $1', [orderId]);
-      const o = oRes.rows[0];
-      return res.status(201).json({ orderId, ...o, message: 'Pedido criado. Prossiga para o pagamento.' });
+      return res.status(201).json({
+        orderId,
+        subtotal,
+        shippingCost,
+        total,
+        message: 'Pedido criado. Prossiga para o pagamento.',
+      });
     } catch (err) {
-      if (err.status) return res.status(err.status).json({ error: err.message });
       console.error('[Orders/Create]', err.message);
-      return res.status(500).json({ error: 'Erro ao criar pedido.' });
+      return res.status(500).json({ error: 'Erro ao criar pedido. Tente novamente.' });
     }
   }
 );
