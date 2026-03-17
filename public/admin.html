@@ -159,6 +159,8 @@
     .inline-input:focus{border-color:var(--caramel)}
     .save-btn{background:var(--caramel);border:none;color:var(--bg);font-size:.78rem;font-weight:600;padding:6px 12px;border-radius:7px;margin-left:6px;transition:background .2s}
     .save-btn:hover{background:#D4A858}
+    textarea.form-input{background:var(--surface);border:1.5px solid var(--border);color:var(--text);border-radius:10px;padding:10px 14px;outline:none;transition:border-color .2s;width:100%}
+    textarea.form-input:focus{border-color:var(--caramel)}
     .refresh-btn{background:none;border:1.5px solid var(--border);border-radius:8px;color:var(--text-muted);padding:6px 12px;font-size:.82rem;transition:all .2s;display:inline-flex;align-items:center;gap:5px}
     .refresh-btn:hover{border-color:var(--caramel);color:var(--caramel)}
     .avatar{width:28px;height:28px;border-radius:50%;background:var(--caramel);display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:var(--bg);margin-right:8px;vertical-align:middle;flex-shrink:0}
@@ -250,6 +252,57 @@
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
       <button class="btn-confirm" onclick="confirmStatusUpdate()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRODUCT MODAL -->
+<div class="modal-overlay" id="product-modal">
+  <div class="modal" style="max-width:560px">
+    <h3 id="pmodal-title">Novo Produto</h3>
+    <p id="pmodal-sub">Preencha os dados do produto.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="form-group" style="grid-column:span 2">
+        <label>Nome do produto</label>
+        <input type="text" class="form-input" id="p-name" placeholder="Ex: Granola de Quinoa & Açaí"/>
+      </div>
+      <div class="form-group">
+        <label>SKU <small style="color:var(--text-muted)">(código único)</small></label>
+        <input type="text" class="form-input" id="p-sku" placeholder="Ex: GV-QUI-400" style="text-transform:uppercase"/>
+      </div>
+      <div class="form-group">
+        <label>Peso (gramas)</label>
+        <input type="number" class="form-input" id="p-weight" min="1" placeholder="400"/>
+      </div>
+      <div class="form-group">
+        <label>Preço (R$)</label>
+        <input type="number" class="form-input" id="p-price" min="0.01" step="0.01" placeholder="0,00"/>
+      </div>
+      <div class="form-group">
+        <label>Estoque inicial</label>
+        <input type="number" class="form-input" id="p-stock" min="0" placeholder="0"/>
+      </div>
+      <div class="form-group" style="grid-column:span 2">
+        <label>Descrição</label>
+        <textarea class="form-input" id="p-desc" rows="3" placeholder="Descreva os ingredientes e diferenciais do produto..." style="resize:vertical;min-height:80px;font-family:'DM Sans',sans-serif"></textarea>
+      </div>
+    </div>
+    <div class="form-error" id="pmodal-error" style="margin-bottom:10px"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeProductModal()">Cancelar</button>
+      <button class="btn-confirm" id="pmodal-save" onclick="saveProduct()">Salvar Produto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ARCHIVE CONFIRM MODAL -->
+<div class="modal-overlay" id="archive-modal">
+  <div class="modal" style="max-width:400px">
+    <h3 id="archive-title">Arquivar produto?</h3>
+    <p id="archive-sub">O produto ficará invisível na loja, mas o histórico de pedidos é mantido.</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeArchiveModal()">Cancelar</button>
+      <button class="btn-confirm" id="archive-confirm-btn" onclick="confirmArchive()">Confirmar</button>
     </div>
   </div>
 </div>
@@ -518,35 +571,244 @@ async function confirmStatusUpdate() {
 // ═══════════════════════════════════════════════════════════
 //  PRODUCTS
 // ═══════════════════════════════════════════════════════════
+let editingProductId = null;
+let archivingProduct = null;
+
 async function renderProducts() {
   const products = await api('/api/admin/products');
   const c = document.getElementById('content');
+
+  const active   = products.filter(p => p.active);
+  const inactive = products.filter(p => !p.active);
+  const lowStock = active.filter(p => p.stock <= 10);
+
   c.innerHTML = `
+    <!-- KPIs rápidos -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-card-head"><span class="stat-label">Ativos</span><div class="stat-icon icon-green">✅</div></div>
+        <div class="stat-value">${active.length}</div>
+        <div class="stat-sub">de ${products.length} cadastrados</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-head"><span class="stat-label">Estoque total</span><div class="stat-icon icon-blue">📦</div></div>
+        <div class="stat-value">${active.reduce((s,p)=>s+p.stock,0)}</div>
+        <div class="stat-sub">unidades disponíveis</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-head"><span class="stat-label">Estoque baixo</span><div class="stat-icon icon-yellow">⚠️</div></div>
+        <div class="stat-value" style="color:${lowStock.length>0?'#F2C94C':'inherit'}">${lowStock.length}</div>
+        <div class="stat-sub">produto(s) com ≤ 10 un.</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-head"><span class="stat-label">Arquivados</span><div class="stat-icon" style="background:var(--red-lt);color:#EB5757">🗄️</div></div>
+        <div class="stat-value">${inactive.length}</div>
+        <div class="stat-sub">invisíveis na loja</div>
+      </div>
+    </div>
+
+    <!-- Tabela de produtos -->
     <div class="table-card">
-      <div class="table-head"><div class="table-title">🥣 Produtos & Estoque</div></div>
-      <table>
-        <thead><tr><th>SKU</th><th>Produto</th><th>Preço</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead>
-        <tbody>
-          ${products.map(p=>`
-            <tr>
-              <td style="color:var(--text-muted);font-size:.8rem;font-family:monospace">${p.sku}</td>
-              <td style="color:var(--cream)">${p.name}</td>
-              <td>
-                <input class="inline-input" type="number" value="${p.price.toFixed(2)}" min="0.01" step="0.01" id="price-${p.id}"/>
-                <button class="save-btn" onclick="updatePrice(${p.id})">💾</button>
-              </td>
-              <td>
-                <input class="inline-input" type="number" value="${p.stock}" min="0" id="stock-${p.id}"/>
-                <button class="save-btn" onclick="updateStock(${p.id})">💾</button>
-              </td>
-              <td><span class="badge badge-${p.active?'active':'inactive'}">${p.active?'Ativo':'Inativo'}</span></td>
-              <td style="color:var(--text-muted);font-size:.78rem">${new Date(p.updated_at).toLocaleDateString('pt-BR')}</td>
-            </tr>
-          `).join('')}
+      <div class="table-head">
+        <div class="table-title">🥣 Produtos</div>
+        <div class="table-controls">
+          <div style="display:flex;gap:6px">
+            <button class="page-btn active" id="filter-all"   onclick="filterProducts('all')">Todos</button>
+            <button class="page-btn"        id="filter-active" onclick="filterProducts('active')">Ativos</button>
+            <button class="page-btn"        id="filter-archived" onclick="filterProducts('archived')">Arquivados</button>
+          </div>
+          <button class="btn-confirm" onclick="openProductModal()" style="padding:8px 18px;font-size:.84rem;border-radius:8px">
+            + Novo Produto
+          </button>
+        </div>
+      </div>
+
+      <table id="products-table">
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Produto</th>
+            <th>Preço</th>
+            <th>Estoque</th>
+            <th>Peso</th>
+            <th>Status</th>
+            <th>Atualizado</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="products-tbody">
+          ${renderProductRows(products)}
         </tbody>
       </table>
     </div>
   `;
+
+  // Guarda lista para filtro
+  window._allProducts = products;
+}
+
+function renderProductRows(products) {
+  if (!products.length) return `<tr><td colspan="8" class="table-empty">Nenhum produto encontrado.</td></tr>`;
+  return products.map(p => `
+    <tr id="prow-${p.id}" style="${!p.active?'opacity:.5':''}">
+      <td style="color:var(--caramel);font-size:.78rem;font-family:monospace">${p.sku}</td>
+      <td>
+        <div style="color:var(--cream);font-weight:500">${p.name}</div>
+        <div style="color:var(--text-muted);font-size:.76rem;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.description}</div>
+      </td>
+      <td style="font-family:'Playfair Display',serif;color:var(--cream)">
+        R$ ${Number(p.price).toFixed(2).replace('.',',')}
+      </td>
+      <td>
+        <span style="color:${p.stock===0?'#EB5757':p.stock<=10?'#F2C94C':'#6FCF97'};font-weight:600">
+          ${p.stock}
+        </span>
+        <span style="color:var(--text-muted);font-size:.78rem"> un.</span>
+      </td>
+      <td style="color:var(--text-muted);font-size:.82rem">${p.weight_g}g</td>
+      <td><span class="badge badge-${p.active?'active':'inactive'}">${p.active?'Ativo':'Arquivado'}</span></td>
+      <td style="color:var(--text-muted);font-size:.78rem">${new Date(p.updated_at).toLocaleDateString('pt-BR')}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="action-btn" onclick="openProductModal(${p.id})" title="Editar">✏️ Editar</button>
+          <button class="action-btn ${p.active?'danger':''}" onclick="openArchiveModal(${p.id},'${p.name.replace(/'/g,"\\'")}',${p.active})" title="${p.active?'Arquivar':'Ativar'}">
+            ${p.active?'🗄️ Arquivar':'✅ Ativar'}
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterProducts(filter) {
+  const all = window._allProducts || [];
+  document.querySelectorAll('#filter-all,#filter-active,#filter-archived').forEach(b => b.classList.remove('active'));
+  document.getElementById(`filter-${filter}`).classList.add('active');
+
+  let list = all;
+  if (filter === 'active')   list = all.filter(p => p.active);
+  if (filter === 'archived') list = all.filter(p => !p.active);
+
+  document.getElementById('products-tbody').innerHTML = renderProductRows(list);
+}
+
+// ── Modal de produto (criar / editar) ─────────────────────────────────────────
+function openProductModal(productId = null) {
+  editingProductId = productId;
+  const modal = document.getElementById('product-modal');
+  const err   = document.getElementById('pmodal-error');
+  err.textContent = '';
+
+  if (productId) {
+    const p = (window._allProducts || []).find(x => x.id === productId);
+    if (!p) return;
+    document.getElementById('pmodal-title').textContent = 'Editar Produto';
+    document.getElementById('pmodal-sub').textContent   = `SKU: ${p.sku}`;
+    document.getElementById('p-name').value   = p.name;
+    document.getElementById('p-sku').value    = p.sku;
+    document.getElementById('p-sku').disabled = true;   // SKU não pode mudar
+    document.getElementById('p-price').value  = Number(p.price).toFixed(2);
+    document.getElementById('p-stock').value  = p.stock;
+    document.getElementById('p-weight').value = p.weight_g;
+    document.getElementById('p-desc').value   = p.description;
+    document.getElementById('pmodal-save').textContent = 'Salvar Alterações';
+  } else {
+    document.getElementById('pmodal-title').textContent = 'Novo Produto';
+    document.getElementById('pmodal-sub').textContent   = 'Preencha os dados do produto.';
+    document.getElementById('p-name').value   = '';
+    document.getElementById('p-sku').value    = '';
+    document.getElementById('p-sku').disabled = false;
+    document.getElementById('p-price').value  = '';
+    document.getElementById('p-stock').value  = '';
+    document.getElementById('p-weight').value = '400';
+    document.getElementById('p-desc').value   = '';
+    document.getElementById('pmodal-save').textContent = 'Criar Produto';
+  }
+  modal.classList.add('open');
+}
+
+function closeProductModal() {
+  document.getElementById('product-modal').classList.remove('open');
+  editingProductId = null;
+}
+
+async function saveProduct() {
+  const btn = document.getElementById('pmodal-save');
+  const err = document.getElementById('pmodal-error');
+  err.textContent = '';
+
+  const payload = {
+    name:        document.getElementById('p-name').value.trim(),
+    sku:         document.getElementById('p-sku').value.trim().toUpperCase(),
+    price:       parseFloat(document.getElementById('p-price').value),
+    stock:       parseInt(document.getElementById('p-stock').value),
+    weight_g:    parseInt(document.getElementById('p-weight').value),
+    description: document.getElementById('p-desc').value.trim(),
+  };
+
+  // Validação básica no frontend
+  if (!payload.name)               return (err.textContent = 'Informe o nome.');
+  if (!payload.sku)                return (err.textContent = 'Informe o SKU.');
+  if (isNaN(payload.price) || payload.price <= 0) return (err.textContent = 'Preço inválido.');
+  if (isNaN(payload.stock) || payload.stock < 0)  return (err.textContent = 'Estoque inválido.');
+  if (!payload.description)        return (err.textContent = 'Informe a descrição.');
+
+  btn.disabled = true;
+  btn.textContent = 'Salvando…';
+
+  try {
+    if (editingProductId) {
+      await api(`/api/admin/products/${editingProductId}`, 'PUT', payload);
+      showToast('Produto atualizado!', 'success');
+    } else {
+      await api('/api/admin/products', 'POST', payload);
+      showToast('Produto criado!', 'success');
+    }
+    closeProductModal();
+    await renderProducts();
+  } catch(ex) {
+    err.textContent = ex.message || 'Erro ao salvar.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = editingProductId ? 'Salvar Alterações' : 'Criar Produto';
+  }
+}
+
+// ── Modal de arquivar / ativar ────────────────────────────────────────────────
+function openArchiveModal(productId, productName, isActive) {
+  archivingProduct = { id: productId, active: isActive };
+  const confirmBtn = document.getElementById('archive-confirm-btn');
+
+  if (isActive) {
+    document.getElementById('archive-title').textContent = `Arquivar "${productName}"?`;
+    document.getElementById('archive-sub').textContent   = 'O produto ficará invisível na loja, mas o histórico de pedidos é mantido.';
+    confirmBtn.textContent = '🗄️ Arquivar';
+    confirmBtn.style.background = 'var(--red)';
+  } else {
+    document.getElementById('archive-title').textContent = `Ativar "${productName}"?`;
+    document.getElementById('archive-sub').textContent   = 'O produto voltará a aparecer na loja imediatamente.';
+    confirmBtn.textContent = '✅ Ativar';
+    confirmBtn.style.background = 'var(--caramel)';
+  }
+  document.getElementById('archive-modal').classList.add('open');
+}
+
+function closeArchiveModal() {
+  document.getElementById('archive-modal').classList.remove('open');
+  archivingProduct = null;
+}
+
+async function confirmArchive() {
+  if (!archivingProduct) return;
+  try {
+    const newActive = !archivingProduct.active;
+    await api(`/api/admin/products/${archivingProduct.id}/active`, 'PATCH', { active: newActive });
+    showToast(newActive ? 'Produto ativado!' : 'Produto arquivado.', newActive ? 'success' : 'error');
+    closeArchiveModal();
+    await renderProducts();
+  } catch(ex) {
+    showToast('Erro: ' + ex.message, 'error');
+  }
 }
 
 async function updateStock(id) {

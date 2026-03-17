@@ -257,3 +257,91 @@ router.get('/audit-log', (req, res) => {
 });
 
 module.exports = router;
+
+// ─── POST /api/admin/products ── Criar produto ────────────────────────────────
+router.post('/products',
+  body('sku').trim().isLength({ min: 2, max: 30 }).withMessage('SKU inválido.'),
+  body('name').trim().isLength({ min: 2, max: 120 }).withMessage('Nome inválido.'),
+  body('description').trim().isLength({ min: 2 }).withMessage('Descrição inválida.'),
+  body('price').isFloat({ min: 0.01 }).withMessage('Preço inválido.'),
+  body('stock').isInt({ min: 0 }).withMessage('Estoque inválido.'),
+  body('weight_g').isInt({ min: 1 }).withMessage('Peso inválido.'),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array().map(e => e.msg) });
+
+    const { sku, name, description, price, stock, weight_g } = req.body;
+
+    const existing = db.prepare('SELECT id FROM products WHERE sku = ?').get(sku.toUpperCase());
+    if (existing) return res.status(409).json({ error: 'Já existe um produto com este SKU.' });
+
+    const result = db.prepare(`
+      INSERT INTO products (sku, name, description, price, stock, weight_g)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(sku.toUpperCase(), name, description, price, stock, weight_g);
+
+    auditLog(req.user.id, 'product_created', req, {
+      entity: 'product', entityId: result.lastInsertRowid,
+      details: { sku, name, price },
+    });
+
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(result.lastInsertRowid);
+    return res.status(201).json(product);
+  }
+);
+
+// ─── PUT /api/admin/products/:id ── Editar produto completo ──────────────────
+router.put('/products/:id',
+  param('id').isInt(),
+  body('name').trim().isLength({ min: 2, max: 120 }),
+  body('description').trim().isLength({ min: 2 }),
+  body('price').isFloat({ min: 0.01 }),
+  body('stock').isInt({ min: 0 }),
+  body('weight_g').isInt({ min: 1 }),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array().map(e => e.msg) });
+
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+    if (!product) return res.status(404).json({ error: 'Produto não encontrado.' });
+
+    const { name, description, price, stock, weight_g } = req.body;
+
+    db.prepare(`
+      UPDATE products
+      SET name = ?, description = ?, price = ?, stock = ?, weight_g = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(name, description, price, stock, weight_g, product.id);
+
+    auditLog(req.user.id, 'product_updated', req, {
+      entity: 'product', entityId: product.id,
+      details: { before: { name: product.name, price: product.price, stock: product.stock }, after: { name, price, stock } },
+    });
+
+    const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(product.id);
+    return res.json(updated);
+  }
+);
+
+// ─── PATCH /api/admin/products/:id/active ── Ativar/Arquivar ─────────────────
+router.patch('/products/:id/active',
+  param('id').isInt(),
+  body('active').isBoolean(),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array().map(e => e.msg) });
+
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+    if (!product) return res.status(404).json({ error: 'Produto não encontrado.' });
+
+    db.prepare(`UPDATE products SET active = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(req.body.active ? 1 : 0, product.id);
+
+    auditLog(req.user.id, 'product_active_changed', req, {
+      entity: 'product', entityId: product.id,
+      details: { active: req.body.active },
+    });
+
+    return res.json({ message: req.body.active ? 'Produto ativado.' : 'Produto arquivado.', id: product.id });
+  }
+);
