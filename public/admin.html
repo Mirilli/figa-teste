@@ -988,11 +988,30 @@ async function renderSettings() {
   const c = document.getElementById('content');
   c.innerHTML = '<p style="color:var(--text-muted);padding:24px">Carregando…</p>';
 
-  const s = await api('/api/admin/settings');
-  window._storeSettings = s;
-  checkCloudinaryAvailable();
+  try {
+    const s = await api('/api/admin/settings');
+    window._storeSettings = s;
+    checkCloudinaryAvailable();
 
-  c.innerHTML = `
+    // Pre-compute values that would cause nested template literal issues
+    const heroPreview = s.hero_image_url
+      ? '<img src="' + s.hero_image_url + '" style="width:100%;height:100%;object-fit:cover;border-radius:10px" onerror="this.parentNode.innerHTML='🥣'"/>'
+      : '🥣';
+    const cloudinarySetup = (s.cloudinary_cloud && s.cloudinary_preset)
+      ? '<span style="color:#6FCF97;font-size:.8rem">✅ Configurado</span>'
+      : '<span style="color:var(--text-muted);font-size:.8rem">Não configurado</span>';
+    const heroCloudinaryBtn = (s.cloudinary_cloud && s.cloudinary_preset)
+      ? '<div id="hero-cloudinary-btn" style="margin-top:8px"><button type="button" class="action-btn" onclick="uploadToCloudinary('hero')" style="width:100%">☁️ Upload para Cloudinary</button><input type="file" id="hero-img-file" accept="image/jpeg,image/png,image/webp" style="display:none"/></div>'
+      : '<div id="hero-cloudinary-btn" style="display:none"><button type="button" class="action-btn" onclick="uploadToCloudinary('hero')" style="width:100%">☁️ Upload para Cloudinary</button><input type="file" id="hero-img-file" accept="image/jpeg,image/png,image/webp" style="display:none"/></div>';
+
+    c.innerHTML = settingsHTML(s, heroPreview, cloudinarySetup, heroCloudinaryBtn);
+  } catch(err) {
+    c.innerHTML = '<p style="color:var(--red);padding:24px">Erro ao carregar configurações: ' + err.message + '</p>';
+  }
+}
+
+function settingsHTML(s, heroPreview, cloudinarySetup, heroCloudinaryBtn) {
+  return \`
     <div style="max-width:800px">
 
       <!-- INFO DA LOJA -->
@@ -1053,7 +1072,7 @@ async function renderSettings() {
         <div style="padding:24px">
           <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
             <div id="hero-img-preview" style="width:160px;height:120px;border-radius:12px;background:var(--surface);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:3rem;flex-shrink:0;overflow:hidden">
-              ${s.hero_image_url ? `<img src="${s.hero_image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:10px"/>` : '🥣'}
+              ${heroPreview}
             </div>
             <div style="flex:1;min-width:240px">
               <div class="form-group">
@@ -1062,10 +1081,7 @@ async function renderSettings() {
                   oninput="previewHeroImageUrl(this.value)"
                   placeholder="https://res.cloudinary.com/... ou outro link"/>
               </div>
-              <div id="hero-cloudinary-btn" style="display:none;margin-top:8px">
-                <button type="button" class="action-btn" onclick="uploadToCloudinary('hero')" style="width:100%">☁️ Upload para Cloudinary</button>
-                <input type="file" id="hero-img-file" accept="image/jpeg,image/png,image/webp" style="display:none"/>
-              </div>
+              ${heroCloudinaryBtn}
               <div style="font-size:.75rem;color:var(--text-muted);margin-top:8px;line-height:1.55">
                 Cole a URL de qualquer imagem hospedada externamente.<br/>
                 Para upload direto, configure o Cloudinary abaixo.
@@ -1250,6 +1266,11 @@ const SECTION_ICONS = {
 };
 const SECTION_FIXED = ['hero','benefits','products','kit','testimonials','faq','newsletter'];
 
+function buildCloudinaryHint() {
+  if (window._storeSettings?.cloudinary_cloud) return '';
+  return '<div style="margin-top:12px;padding:14px 18px;background:rgba(198,149,74,.08);border:1px solid rgba(198,149,74,.2);border-radius:12px;font-size:.82rem;color:var(--caramel);line-height:1.6">☁️ <strong>Para adicionar fotos à imagem do hero e aos produtos</strong>, configure o Cloudinary em <button onclick="navigate('settings')" style="background:none;border:none;color:var(--caramel);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Configurações</button>. É gratuito e leva menos de 5 minutos.</div>';
+}
+
 async function renderSections() {
   const sections = await api('/api/admin/sections');
   const c = document.getElementById('content');
@@ -1274,12 +1295,7 @@ async function renderSections() {
         Alterações ficam visíveis na loja imediatamente.
       </div>
     </div>
-    ${!window._storeSettings?.cloudinary_cloud ? `
-    <div style="margin-top:12px;padding:14px 18px;background:rgba(198,149,74,.08);border:1px solid rgba(198,149,74,.2);border-radius:12px;font-size:.82rem;color:var(--caramel);line-height:1.6">
-      ☁️ <strong>Para adicionar fotos à imagem do hero e aos produtos</strong>, configure o Cloudinary em
-      <button onclick="navigate('settings')" style="background:none;border:none;color:var(--caramel);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Configurações</button>.
-      É gratuito e leva menos de 5 minutos.
-    </div>` : ''}
+    ${buildCloudinaryHint()}
   `;
 }
 
@@ -1349,6 +1365,11 @@ function openEditSection(id) {
   if (!section) { renderSections().then(() => openEditSection(id)); return; }
   editingSectionId = id;
   showSectionEditor(section);
+}
+
+function buildCloudinaryHint() {
+  if (window._storeSettings?.cloudinary_cloud) return '';
+  return '<div style="margin-top:12px;padding:14px 18px;background:rgba(198,149,74,.08);border:1px solid rgba(198,149,74,.2);border-radius:12px;font-size:.82rem;color:var(--caramel);line-height:1.6">☁️ <strong>Para adicionar fotos à imagem do hero e aos produtos</strong>, configure o Cloudinary em <button onclick="navigate('settings')" style="background:none;border:none;color:var(--caramel);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Configurações</button>. É gratuito e leva menos de 5 minutos.</div>';
 }
 
 async function renderSections() {
