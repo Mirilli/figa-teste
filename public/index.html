@@ -291,6 +291,42 @@
     /* PAGE SECTIONS */
     .page-section{display:none}
     .page-section.active{display:block}
+
+    /* CATALOG PAGE */
+    .catalog-hero{background:var(--dark);padding:64px 0 48px;margin-bottom:0}
+    .catalog-hero h1{font-size:clamp(2rem,4vw,3rem);color:var(--tan);margin-bottom:10px}
+    .catalog-hero p{color:#8B7060;max-width:480px}
+    .catalog-filters{background:#fff;border-bottom:1px solid var(--tan);padding:16px 0;position:sticky;top:70px;z-index:90}
+    .filter-pills{display:flex;gap:8px;flex-wrap:wrap}
+    .filter-pill{padding:7px 18px;border-radius:100px;border:1.5px solid var(--tan);background:#fff;font-family:'DM Sans',sans-serif;font-size:.82rem;font-weight:500;cursor:pointer;color:var(--dark);transition:all .2s}
+    .filter-pill:hover,.filter-pill.active{background:var(--brown);border-color:var(--brown);color:#fff}
+    .catalog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;padding:48px 0}
+    @media(max-width:900px){.catalog-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:560px){.catalog-grid{grid-template-columns:1fr}}
+
+    /* PRODUCT DETAIL PAGE */
+    .pd-back{display:inline-flex;align-items:center;gap:6px;color:var(--brown);font-size:.88rem;font-weight:500;cursor:pointer;margin-bottom:32px;background:none;border:none;padding:0;transition:gap .2s}
+    .pd-back:hover{gap:10px}
+    .pd-layout{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:start;padding:56px 0}
+    .pd-img{border-radius:24px;overflow:hidden;aspect-ratio:1;background:var(--tan);display:flex;align-items:center;justify-content:center;font-size:8rem;position:relative}
+    .pd-img img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+    .pd-tag{display:inline-block;background:var(--green-lt);color:var(--green);font-size:.72rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase;padding:4px 12px;border-radius:100px;margin-bottom:16px}
+    .pd-name{font-size:clamp(1.8rem,3vw,2.6rem);color:var(--dark);margin-bottom:12px}
+    .pd-price{font-family:'Playfair Display',serif;font-size:2.4rem;color:var(--brown);font-weight:700;margin-bottom:24px}
+    .pd-desc{color:#5A4535;line-height:1.75;margin-bottom:28px;font-size:.95rem}
+    .pd-tags{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:32px}
+    .pd-qty{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+    .pd-qty-btn{width:40px;height:40px;border-radius:50%;border:2px solid var(--tan);background:#fff;font-size:1.2rem;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s}
+    .pd-qty-btn:hover{border-color:var(--brown);background:var(--brown);color:#fff}
+    .pd-qty-num{font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:700;min-width:32px;text-align:center}
+    .pd-add{width:100%;padding:16px;border-radius:14px;font-size:1rem;font-weight:500;margin-bottom:12px}
+    .pd-nutrition{background:var(--tan);border-radius:20px;padding:28px;margin-top:32px}
+    .pd-nutrition h3{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:16px;color:var(--dark)}
+    .pd-nut-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.08);font-size:.88rem}
+    .pd-nut-row:last-child{border-bottom:none}
+    .pd-nut-val{font-weight:500;color:var(--dark)}
+    .pd-related{padding:56px 0;border-top:1px solid var(--tan)}
+    @media(max-width:768px){.pd-layout{grid-template-columns:1fr;gap:32px}.pd-img{max-width:320px;margin:0 auto}}
   </style>
 </head>
 <body>
@@ -303,10 +339,10 @@
   <div class="container nav-inner">
     <a href="/" class="logo" onclick="showPage('home')">Grano<span>Vita</span></a>
     <ul class="nav-links">
-      <li><a href="#produtos" onclick="showPage('home')">Produtos</a></li>
-      <li><a href="#kit" onclick="showPage('home')">Kit Família</a></li>
-      <li><a href="#ingredientes" onclick="showPage('home')">Ingredientes</a></li>
-      <li><a href="#faq" onclick="showPage('home')">FAQ</a></li>
+      <li><a href="#" onclick="showPage('home');return false">Início</a></li>
+      <li><a href="#" onclick="showPage('catalog');return false">Produtos</a></li>
+      <li><a href="#kit" onclick="showPage('home');return false">Kit Família</a></li>
+      <li><a href="#faq" onclick="showPage('home');return false">FAQ</a></li>
     </ul>
     <div class="nav-right">
       <button class="cart-btn" onclick="toggleCart()" aria-label="Carrinho">
@@ -339,31 +375,7 @@
   <div id="sections-loading" style="min-height:60vh;display:flex;align-items:center;justify-content:center;color:#8B7060;font-size:.9rem">
     Carregando…
   </div>
-</main>
-
-  <footer>
-    <div class="container">
-      <div class="footer-grid">
-        <div class="footer-brand">
-          <div class="logo">Grano<span>Vita</span></div>
-          <p>Granolas artesanais feitas com amor e ingredientes naturais selecionados a dedo.</p>
-          <div class="footer-socials">
-            <a href="#" class="soc" aria-label="Instagram">📸</a>
-            <a href="#" class="soc" aria-label="Facebook">👍</a>
-            <a href="https://wa.me/5511999999999" target="_blank" class="soc" aria-label="WhatsApp">💬</a>
-          </div>
-        </div>
-        <div class="footer-col"><h4>Produtos</h4><ul><li><a href="#produtos">Granola Clássica</a></li><li><a href="#produtos">Granola Tropical</a></li><li><a href="#produtos">Granola Dark</a></li><li><a href="#kit">Kit Família</a></li></ul></div>
-        <div class="footer-col"><h4>Informações</h4><ul><li><a href="#faq">FAQ</a></li><li><a href="#">Política de Entrega</a></li><li><a href="#">Trocas e Devoluções</a></li></ul></div>
-        <div class="footer-col"><h4>Contato</h4><ul><li><a href="mailto:oi@granovita.com.br">oi@granovita.com.br</a></li><li><a href="https://wa.me/5511999999999" target="_blank">WhatsApp</a></li></ul></div>
-      </div>
-      <div class="footer-bottom">
-        <span>© 2025 GranoVita. CNPJ 00.000.000/0001-00</span>
-        <div class="pay-icons"><span class="pay-icon">💳 Cartão</span><span class="pay-icon">⚡ Pix</span><span class="pay-icon">📄 Boleto</span><span class="mp-badge">Mercado Pago</span></div>
-      </div>
-    </div>
-  </footer>
-</div>
+</main></div>
 
 <!-- ORDERS PAGE -->
 <div id="page-orders" class="page-section" style="background:var(--cream);min-height:80vh;padding-top:40px">
@@ -371,6 +383,16 @@
     <h2>📦 Meus Pedidos</h2>
     <div id="orders-list"><p style="color:#8B7060">Carregando…</p></div>
   </div>
+</div>
+
+<!-- PRODUCTS CATALOG PAGE -->
+<div id="page-catalog" class="page-section" style="background:var(--cream);min-height:80vh">
+  <div id="catalog-content"></div>
+</div>
+
+<!-- PRODUCT DETAIL PAGE -->
+<div id="page-product" class="page-section" style="background:var(--cream);min-height:80vh">
+  <div id="product-detail-content"></div>
 </div>
 
 <!-- CART DRAWER -->
@@ -582,6 +604,11 @@ function renderProductsSection(c) {
       <div class="products-grid" id="products-grid">
         <div style="grid-column:span 3;text-align:center;padding:48px;color:#8B7060">Carregando produtos…</div>
       </div>
+      <div style="text-align:center;margin-top:40px">
+        <button onclick="showPage('catalog')" class="btn btn-outline" style="font-size:.95rem;padding:14px 36px">
+          Ver todos os produtos →
+        </button>
+      </div>
     </div>
   </section>`;
 }
@@ -761,6 +788,268 @@ async function loadProducts() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+//  CATÁLOGO DE PRODUTOS
+// ═══════════════════════════════════════════════════════════
+const NUTRI = {
+  'GV-CLA-400': [{l:'Calorias',v:'215 kcal'},{l:'Carboidratos',v:'32g'},{l:'Proteínas',v:'6g'},{l:'Gorduras Totais',v:'8g'},{l:'Fibras',v:'4g'}],
+  'GV-TRO-400': [{l:'Calorias',v:'198 kcal'},{l:'Carboidratos',v:'36g'},{l:'Proteínas',v:'4g'},{l:'Gorduras Totais',v:'5g'},{l:'Fibras',v:'5g'}],
+  'GV-DRK-400': [{l:'Calorias',v:'235 kcal'},{l:'Carboidratos',v:'28g'},{l:'Proteínas',v:'9g'},{l:'Gorduras Totais',v:'11g'},{l:'Fibras',v:'6g'}],
+  'GV-KIT-3X':  [{l:'Contém',v:'3 embalagens de 400g'},{l:'Sabores',v:'Clássica, Tropical, Dark'}],
+};
+const HIGHLIGHTS = {
+  'GV-CLA-400': ['Mel puro brasileiro','Castanha-do-Pará','Nozes e amendoim','Aveia integral tostada','Zero conservantes'],
+  'GV-TRO-400': ['Manga desidratada','Abacaxi em pedaços','Coco ralado fino','Castanha de caju','Sem açúcar refinado'],
+  'GV-DRK-400': ['Cacau 70% puro','Avelãs torradas','Gotas de chocolate amargo','Alto teor proteico','Low carb friendly'],
+  'GV-KIT-3X':  ['3 sabores exclusivos','Frete grátis','Embalagem presente','Cartão personalizado','17% de desconto'],
+};
+
+let catalogFilter = 'all';
+
+async function loadCatalog() {
+  const el = document.getElementById('catalog-content');
+  el.innerHTML = '<div style="padding:80px;text-align:center;color:#8B7060">Carregando…</div>';
+
+  try {
+    if (!products.length) {
+      const data = await apiFetch('/api/products');
+      products = data;
+    }
+    renderCatalog(products);
+  } catch {
+    el.innerHTML = '<div style="padding:80px;text-align:center;color:var(--error)">Erro ao carregar produtos.</div>';
+  }
+}
+
+function renderCatalog(prods) {
+  const el = document.getElementById('catalog-content');
+  const tags = ['all', ...new Set(prods.map(p => p.weight_g >= 1000 ? 'kit' : 'individual'))];
+
+  let filtered = prods;
+  if (catalogFilter === 'kit')        filtered = prods.filter(p => p.weight_g >= 1000);
+  if (catalogFilter === 'individual') filtered = prods.filter(p => p.weight_g < 1000);
+
+  el.innerHTML = `
+    <!-- Cabeçalho da página -->
+    <div class="catalog-hero">
+      <div class="container">
+        <span class="tag" style="background:rgba(198,149,74,.15);color:var(--caramel);margin-bottom:16px;display:inline-block">🥣 Todos os produtos</span>
+        <h1 class="catalog-hero" style="font-family:'Playfair Display',serif;font-size:clamp(2rem,4vw,3rem);color:var(--tan);margin-bottom:10px">
+          Granolas <em style="color:var(--caramel);font-style:italic">GranoVita</em>
+        </h1>
+        <p style="color:#8B7060;max-width:480px;font-size:.95rem">
+          ${filtered.length} produto${filtered.length !== 1 ? 's' : ''} disponíve${filtered.length !== 1 ? 'is' : 'l'}.
+          Feitos em pequenos lotes, sem conservantes, entregues frescos.
+        </p>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="catalog-filters">
+      <div class="container">
+        <div class="filter-pills">
+          <button class="filter-pill ${catalogFilter==='all'?'active':''}"        onclick="setCatalogFilter('all')">Todos (${prods.length})</button>
+          <button class="filter-pill ${catalogFilter==='individual'?'active':''}" onclick="setCatalogFilter('individual')">Embalagens individuais</button>
+          <button class="filter-pill ${catalogFilter==='kit'?'active':''}"        onclick="setCatalogFilter('kit')">Kits</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid -->
+    <div class="container">
+      <div class="catalog-grid">
+        ${filtered.map(p => renderCatalogCard(p)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function setCatalogFilter(filter) {
+  catalogFilter = filter;
+  renderCatalog(products);
+}
+
+function renderCatalogCard(p) {
+  const visual = p.image_url
+    ? `<div class="pvisual ${PV[p.sku]||'pv1'}" style="padding:0;overflow:hidden;height:240px">
+         <img src="${p.image_url}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover" loading="lazy"
+              onerror="this.parentNode.innerHTML='<span class=pemoji style=font-size:5rem>${PE[p.sku]||'🥣'}</span>'"/>
+       </div>`
+    : `<div class="pvisual ${PV[p.sku]||'pv1'}" style="height:240px"><span class="pemoji">${PE[p.sku]||'🥣'}</span></div>`;
+
+  return `
+    <article class="pcard" style="cursor:pointer" onclick="showPage('product', ${p.id})">
+      ${PB[p.sku] ? `<span class="pbadge">${PB[p.sku]}</span>` : ''}
+      ${visual}
+      <div class="pinfo">
+        <h3 class="pname">${p.name}</h3>
+        <p class="pdesc">${p.description}</p>
+        <div class="ptags">
+          ${(PT[p.sku]||[]).map(t=>`<span class="ptag">${t}</span>`).join('')}
+          <span class="ptag" style="background:var(--tan);color:var(--brown)">${p.weight_g}g</span>
+        </div>
+        <div class="pfoot">
+          <div class="pprice">
+            <span>Embalagem ${p.weight_g}g</span>
+            <strong>R$ ${p.price.toFixed(2).replace('.',',')}</strong>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="add-btn" title="Adicionar ao carrinho"
+              onclick="event.stopPropagation();addToCart(${p.id})" aria-label="Adicionar">+</button>
+          </div>
+        </div>
+      </div>
+    </article>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DETALHE DO PRODUTO
+// ═══════════════════════════════════════════════════════════
+let detailQty = 1;
+
+async function loadProductDetail(productId) {
+  const el = document.getElementById('product-detail-content');
+  el.innerHTML = '<div style="padding:80px;text-align:center;color:#8B7060">Carregando…</div>';
+
+  try {
+    if (!products.length) {
+      const data = await apiFetch('/api/products');
+      products = data;
+    }
+    const product = products.find(p => p.id === productId);
+    if (!product) { el.innerHTML = '<div style="padding:80px;text-align:center;color:var(--error)">Produto não encontrado.</div>'; return; }
+    detailQty = 1;
+    renderProductDetail(product);
+  } catch {
+    el.innerHTML = '<div style="padding:80px;text-align:center;color:var(--error)">Erro ao carregar produto.</div>';
+  }
+}
+
+function renderProductDetail(p) {
+  const el = document.getElementById('product-detail-content');
+  const nutri = NUTRI[p.sku] || [];
+  const highlights = HIGHLIGHTS[p.sku] || [];
+  const related = products.filter(x => x.id !== p.id && x.active !== false).slice(0, 3);
+  const total = (p.price * detailQty).toFixed(2).replace('.', ',');
+
+  const imgEl = p.image_url
+    ? `<div class="pd-img"><img src="${p.image_url}" alt="${p.name}"/></div>`
+    : `<div class="pd-img">${PE[p.sku]||'🥣'}</div>`;
+
+  el.innerHTML = `
+    <div class="container">
+      <div style="padding-top:40px">
+        <button class="pd-back" onclick="history.back()">← Voltar</button>
+      </div>
+
+      <div class="pd-layout">
+        <!-- Imagem -->
+        <div>
+          ${imgEl}
+          <!-- Miniaturas dos outros produtos -->
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            ${related.map(r => `
+              <div onclick="showPage('product',${r.id})" title="${r.name}"
+                style="width:64px;height:64px;border-radius:10px;overflow:hidden;cursor:pointer;border:2px solid var(--tan);transition:border-color .2s"
+                onmouseover="this.style.borderColor='var(--caramel)'" onmouseout="this.style.borderColor='var(--tan)'">
+                ${r.image_url
+                  ? `<img src="${r.image_url}" style="width:100%;height:100%;object-fit:cover"/>`
+                  : `<div class="pvisual ${PV[r.sku]||'pv1'}" style="width:100%;height:100%;font-size:1.6rem;border-radius:0">${PE[r.sku]||'🥣'}</div>`}
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- Informações -->
+        <div>
+          <span class="pd-tag">${PB[p.sku] || '🌾 Artesanal'}</span>
+          <h1 class="pd-name">${p.name}</h1>
+          <div class="pd-price">R$ ${p.price.toFixed(2).replace('.',',')}</div>
+          <p class="pd-desc">${p.description}</p>
+
+          <div class="pd-tags">
+            ${(PT[p.sku]||[]).map(t=>`<span class="ptag" style="font-size:.8rem;padding:5px 14px">${t}</span>`).join('')}
+            <span class="ptag" style="font-size:.8rem;padding:5px 14px;background:var(--tan);color:var(--brown)">${p.weight_g}g</span>
+          </div>
+
+          ${highlights.length ? `
+            <div style="background:var(--green-lt);border-radius:14px;padding:18px 20px;margin-bottom:24px">
+              <div style="font-size:.78rem;font-weight:600;color:var(--green);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">✨ Ingredientes em destaque</div>
+              <div style="display:flex;flex-wrap:wrap;gap:7px">
+                ${highlights.map(h=>`<span style="background:#fff;border:1px solid var(--green-lt);color:var(--green);font-size:.8rem;padding:4px 12px;border-radius:100px">${h}</span>`).join('')}
+              </div>
+            </div>` : ''}
+
+          <!-- Quantidade + Adicionar -->
+          ${p.stock > 0 ? `
+            <div class="pd-qty">
+              <button class="pd-qty-btn" onclick="changeDetailQty(-1)">−</button>
+              <span class="pd-qty-num" id="detail-qty">1</span>
+              <button class="pd-qty-btn" onclick="changeDetailQty(1)">+</button>
+              <span style="color:#8B7060;font-size:.88rem">× R$ ${p.price.toFixed(2).replace('.',',')} = <strong style="color:var(--brown)" id="detail-total">R$ ${total}</strong></span>
+            </div>
+            <button class="btn btn-primary pd-add" onclick="addToCartQty(${p.id}, detailQty)">
+              🛒 Adicionar ao carrinho
+            </button>
+          ` : `<div style="padding:16px;background:#F8D7DA;border-radius:10px;color:#721C24;font-size:.9rem;margin-bottom:16px">😔 Produto temporariamente esgotado</div>`}
+
+          <a href="https://wa.me/5511999999999?text=Olá!%20Tenho%20interesse%20no%20produto:%20${encodeURIComponent(p.name)}"
+            target="_blank" class="btn btn-whatsapp" style="width:100%;justify-content:center;border-radius:12px;padding:14px">
+            💬 Perguntar pelo WhatsApp
+          </a>
+
+          <!-- Tabela nutricional -->
+          ${nutri.length ? `
+            <div class="pd-nutrition">
+              <h3>📋 Informações Nutricionais <small style="font-size:.75rem;color:#7A5C45;font-family:'DM Sans',sans-serif;font-weight:300">(por porção de 50g)</small></h3>
+              ${nutri.map(n=>`
+                <div class="pd-nut-row">
+                  <span style="color:#7A5C45">${n.l}</span>
+                  <span class="pd-nut-val">${n.v}</span>
+                </div>`).join('')}
+            </div>` : ''}
+        </div>
+      </div>
+
+      <!-- Produtos relacionados -->
+      ${related.length ? `
+        <div class="pd-related">
+          <h2 style="font-family:'Playfair Display',serif;font-size:1.6rem;color:var(--dark);margin-bottom:32px">
+            Você também pode gostar
+          </h2>
+          <div class="products-grid">
+            ${related.map(r => renderCatalogCard(r)).join('')}
+          </div>
+        </div>` : ''}
+    </div>
+  `;
+}
+
+function changeDetailQty(delta) {
+  detailQty = Math.max(1, Math.min(20, detailQty + delta));
+  const p = products.find(x => document.getElementById('detail-qty') !== null);
+  document.getElementById('detail-qty').textContent = detailQty;
+  // Find current product price from the page
+  const priceEl = document.querySelector('.pd-price');
+  if (priceEl) {
+    const price = parseFloat(priceEl.textContent.replace('R$','').replace(',','.').trim());
+    if (!isNaN(price)) {
+      document.getElementById('detail-total').textContent = 'R$ ' + (price * detailQty).toFixed(2).replace('.',',');
+    }
+  }
+}
+
+function addToCartQty(productId, qty) {
+  const p = products.find(x => x.id === productId);
+  if (!p) return;
+  const existing = cart.find(i => i.productId === productId);
+  if (existing) existing.quantity += qty;
+  else cart.push({ productId: p.id, quantity: qty, name: p.name, price: p.price, sku: p.sku });
+  saveCart();
+  renderCart();
+  showToast(`${qty}× ${p.name} adicionada! 🌾`, 'success');
+  toggleCart();
+}
+
 const PV = { 'GV-CLA-400':'pv1', 'GV-TRO-400':'pv2', 'GV-DRK-400':'pv3', 'GV-KIT-3X':'pv1' };
 const PE = { 'GV-CLA-400':'🍯', 'GV-TRO-400':'🥥', 'GV-DRK-400':'🍫', 'GV-KIT-3X':'🎁' };
 const PB = { 'GV-CLA-400':'⭐ Mais Vendida', 'GV-TRO-400':'🌿 Vegano', 'GV-DRK-400':'💪 Proteico', 'GV-KIT-3X':'💝 Kit Família' };
@@ -771,10 +1060,11 @@ const PT = {
   'GV-KIT-3X':['3 sabores','Frete grátis','Embalagem presente'],
 };
 
-function renderProducts(prods) {
+function renderProducts(prods, limit = 3) {
   const grid = document.getElementById('products-grid');
   if (!grid) return;
-  grid.innerHTML = prods.map(p => {
+  const list = limit ? prods.slice(0, limit) : prods;
+  grid.innerHTML = list.map(p => {
     const visual = p.image_url
       ? `<div class="pvisual ${PV[p.sku]||'pv1'}" style="padding:0;overflow:hidden">
            <img src="${p.image_url}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover" loading="lazy"
@@ -1076,11 +1366,13 @@ async function loadOrders() {
 // ═══════════════════════════════════════════════════════════
 //  NAVEGAÇÃO SPA
 // ═══════════════════════════════════════════════════════════
-function showPage(name) {
+function showPage(name, param) {
   document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
   document.getElementById(`page-${name}`)?.classList.add('active');
   window.scrollTo(0, 0);
-  if (name === 'orders') loadOrders();
+  if (name === 'orders')  loadOrders();
+  if (name === 'catalog') loadCatalog();
+  if (name === 'product') loadProductDetail(param);
 }
 
 // ═══════════════════════════════════════════════════════════

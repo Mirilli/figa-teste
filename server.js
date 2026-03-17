@@ -62,8 +62,8 @@ app.use(cors({
 
 // ─── Compressão e parsing ─────────────────────────────────────────────────────
 app.use(compression());
-app.use(express.json({ limit: '64kb' }));     // limite de payload
-app.use(express.urlencoded({ extended: false, limit: '64kb' }));
+app.use(express.json({ limit: '4mb' }));     // 4MB para suportar imagens base64
+app.use(express.urlencoded({ extended: false, limit: '4mb' }));
 app.use(cookieParser());
 
 // ─── Log de requests (apenas desenvolvimento) ─────────────────────────────────
