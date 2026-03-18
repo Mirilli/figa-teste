@@ -1533,6 +1533,10 @@ function startCheckout() {
   }
 }
 
+function closeCheckoutModal() {
+  document.getElementById('checkout-modal')?.classList.remove('open');
+}
+
 function resetCheckoutForm() {
   ['sh-zip','sh-address','sh-number','sh-complement','sh-neighborhood','sh-city','sh-state']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
