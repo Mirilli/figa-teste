@@ -276,9 +276,22 @@
     /* WHATSAPP */
     .wa-float{position:fixed;bottom:26px;right:26px;z-index:150;width:54px;height:54px;background:#25D366;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;box-shadow:0 4px 20px rgba(37,211,102,.5);cursor:pointer;animation:pulse 2.5s ease-in-out infinite;text-decoration:none}
 
+    /* MOBILE NAV */
+    .mobile-menu-btn{display:none;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--brown);padding:4px 8px;border-radius:8px;transition:background .2s}
+    .mobile-menu-btn:hover{background:var(--tan)}
+    .mobile-nav-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150;opacity:0;pointer-events:none;transition:opacity .3s}
+    .mobile-nav-overlay.open{opacity:1;pointer-events:all}
+    .mobile-nav-drawer{position:fixed;top:0;right:0;width:280px;height:100vh;background:var(--cream);z-index:151;transform:translateX(100%);transition:transform .3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 24px rgba(0,0,0,.15)}
+    .mobile-nav-drawer.open{transform:translateX(0)}
+    .mobile-nav-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--tan)}
+    .mobile-nav-links{list-style:none;padding:16px 0;flex:1;overflow-y:auto}
+    .mobile-nav-links li a{display:block;padding:14px 24px;color:var(--dark);font-size:.95rem;font-weight:400;transition:background .2s;text-decoration:none}
+    .mobile-nav-links li a:hover{background:var(--tan);color:var(--brown)}
+    .mobile-nav-divider{height:1px;background:var(--tan);margin:8px 16px}
+
     /* RESPONSIVE */
     @media(max-width:1024px){.products-grid{grid-template-columns:repeat(2,1fr)}.footer-grid{grid-template-columns:1fr 1fr}}
-    @media(max-width:768px){.hero{grid-template-columns:1fr;min-height:auto}.hero-content{padding:56px 0}.hero-visual{height:320px}.benefits-grid{grid-template-columns:repeat(2,1fr)}.products-grid{grid-template-columns:1fr}.kit-inner{grid-template-columns:1fr;gap:44px}.reviews-grid{grid-template-columns:1fr}.footer-grid{grid-template-columns:1fr}.nav-links{display:none}.nl-form{flex-direction:column}.form-row{grid-template-columns:1fr}}
+    @media(max-width:768px){.hero{grid-template-columns:1fr;min-height:auto}.hero-content{padding:56px 0}.hero-visual{height:320px}.benefits-grid{grid-template-columns:repeat(2,1fr)}.products-grid{grid-template-columns:1fr}.kit-inner{grid-template-columns:1fr;gap:44px}.reviews-grid{grid-template-columns:1fr}.footer-grid{grid-template-columns:1fr}.nav-links{display:none}.mobile-menu-btn{display:flex}.nl-form{flex-direction:column}.form-row{grid-template-columns:1fr}.catalog-grid{grid-template-columns:1fr}.pd-layout{grid-template-columns:1fr;gap:32px}}
 
     /* ANIMATIONS */
     @keyframes fadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
@@ -348,6 +361,9 @@
       <button class="cart-btn" onclick="toggleCart()" aria-label="Carrinho">
         🛒<span class="cart-count" id="cart-count">0</span>
       </button>
+      <button class="mobile-menu-btn" id="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Menu" aria-expanded="false">
+        <span id="menu-icon">☰</span>
+      </button>
       <!-- Mostra botão login se não autenticado -->
       <div id="auth-btns">
         <button class="btn btn-primary" id="user-menu-btn" onclick="openAuthModal()" style="padding:9px 18px;font-size:.84rem;">Entrar</button>
@@ -368,6 +384,31 @@
     </div>
   </div>
 </nav>
+
+<!-- MOBILE NAV DRAWER -->
+<div class="mobile-nav-overlay" id="mobile-nav-overlay" onclick="closeMobileMenu()"></div>
+<div class="mobile-nav-drawer" id="mobile-nav-drawer">
+  <div class="mobile-nav-header">
+    <div class="logo">Grano<span>Vita</span></div>
+    <button onclick="closeMobileMenu()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--brown)">✕</button>
+  </div>
+  <ul class="mobile-nav-links">
+    <li><a href="/" onclick="closeMobileMenu();showPage('home');return false">🏠 Início</a></li>
+    <li><a href="/produtos" onclick="closeMobileMenu();showPage('catalog');return false">🥣 Produtos</a></li>
+    <li><a href="#kit" onclick="closeMobileMenu();showPage('home');return false">🎁 Kit Família</a></li>
+    <li><a href="#faq" onclick="closeMobileMenu();showPage('home');return false">❓ FAQ</a></li>
+    <li class="mobile-nav-divider"></li>
+    <li id="mobile-auth-item">
+      <a href="#" onclick="closeMobileMenu();openAuthModal();return false">👤 Entrar / Criar conta</a>
+    </li>
+    <li id="mobile-orders-item" style="display:none">
+      <a href="/meus-pedidos" onclick="closeMobileMenu();showPage('orders');return false">📦 Meus Pedidos</a>
+    </li>
+    <li id="mobile-logout-item" style="display:none">
+      <a href="#" onclick="closeMobileMenu();logout();return false">🚪 Sair</a>
+    </li>
+  </ul>
+</div>
 
 <!-- HOME PAGE -->
 <div id="page-home" class="page-section active">
@@ -494,6 +535,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderCart();
   await loadSections();
   routeFromURL();
+
+  // Close drawers on ESC
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeMobileMenu();
+      document.getElementById('overlay')?.classList.remove('open');
+      document.getElementById('cart-drawer')?.classList.remove('open');
+      document.getElementById('auth-modal')?.classList.remove('open');
+      document.getElementById('checkout-modal')?.classList.remove('open');
+    }
+  });
 });
 
 function applySettings(s) {
@@ -1241,10 +1293,46 @@ function updateAuthUI() {
     userDd.style.display = 'flex';
     document.getElementById('nav-user-name').textContent = currentUser.name.split(' ')[0];
     document.getElementById('menu-user-email').textContent = currentUser.email;
+    // Mobile nav
+    const mAuth = document.getElementById('mobile-auth-item');
+    const mOrders = document.getElementById('mobile-orders-item');
+    const mLogout = document.getElementById('mobile-logout-item');
+    if (mAuth)   mAuth.style.display   = 'none';
+    if (mOrders) mOrders.style.display = 'list-item';
+    if (mLogout) mLogout.style.display = 'list-item';
   } else {
     authBtns.style.display = 'flex';
     userDd.style.display = 'none';
+    // Mobile nav
+    const mAuth = document.getElementById('mobile-auth-item');
+    const mOrders = document.getElementById('mobile-orders-item');
+    const mLogout = document.getElementById('mobile-logout-item');
+    if (mAuth)   mAuth.style.display   = 'list-item';
+    if (mOrders) mOrders.style.display = 'none';
+    if (mLogout) mLogout.style.display = 'none';
   }
+}
+
+function toggleMobileMenu() {
+  const overlay = document.getElementById('mobile-nav-overlay');
+  const drawer  = document.getElementById('mobile-nav-drawer');
+  const btn     = document.getElementById('mobile-menu-btn');
+  const isOpen  = drawer.classList.contains('open');
+  drawer.classList.toggle('open');
+  overlay.classList.toggle('open');
+  document.getElementById('menu-icon').textContent = isOpen ? '☰' : '✕';
+  btn.setAttribute('aria-expanded', String(!isOpen));
+  document.body.style.overflow = isOpen ? '' : 'hidden';
+}
+
+function closeMobileMenu() {
+  const overlay = document.getElementById('mobile-nav-overlay');
+  const drawer  = document.getElementById('mobile-nav-drawer');
+  drawer.classList.remove('open');
+  overlay.classList.remove('open');
+  document.getElementById('menu-icon').textContent = '☰';
+  document.getElementById('mobile-menu-btn').setAttribute('aria-expanded', 'false');
+  document.body.style.overflow = '';
 }
 
 function openAuthModal() {
@@ -1432,6 +1520,7 @@ const ROUTES = {
 };
 
 function showPage(name, param) {
+  closeMobileMenu();
   document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
   document.getElementById(`page-${name}`)?.classList.add('active');
   window.scrollTo(0, 0);
