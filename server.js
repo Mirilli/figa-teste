@@ -40,7 +40,7 @@ app.use(helmet({
       styleSrc: ["'self'", 'https://fonts.googleapis.com', "'unsafe-inline'"],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'", 'https://api.mercadopago.com'],
+      connectSrc: ["'self'", 'https://api.mercadopago.com', 'https://viacep.com.br'],
       frameSrc: ['https://sdk.mercadopago.com'],
       scriptSrcAttr: ["'unsafe-hashes'", "'unsafe-inline'"],
     },
