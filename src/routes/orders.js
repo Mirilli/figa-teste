@@ -115,9 +115,10 @@ router.post('/',
       }
 
       // ── 2. Calcula totais no servidor ────────────────────────────────────
-      const subtotal = +enriched.reduce((s, i) => s + i.subtotal, 0).toFixed(2);
-      const shippingCost = subtotal >= FREE_SHIPPING_LIMIT ? 0 : SHIPPING_COST;
-      const total = +(subtotal + shippingCost).toFixed(2);
+      const subtotal      = +enriched.reduce((s, i) => s + i.subtotal, 0).toFixed(2);
+      const shippingCalc  = calculateShipping(shipping.state, subtotal);
+      const shippingCost  = shippingCalc.cost;
+      const total         = +(subtotal + shippingCost).toFixed(2);
 
       // ── 3. Persiste pedido em transação atômica ──────────────────────────
       const createOrder = db.transaction(() => {
