@@ -6,11 +6,9 @@ const { body, param, validationResult } = require('express-validator');
 const db = require('../database');
 const { requireAuth }                        = require('../middleware/auth');
 const { generateOrderHash, auditLog }        = require('../middleware/security');
+const { calculateShipping }                  = require('../shipping');
 
 const router = express.Router();
-
-const SHIPPING_COST       = parseFloat(process.env.SHIPPING_COST) || 15.90;
-const FREE_SHIPPING_LIMIT = parseFloat(process.env.FREE_SHIPPING_THRESHOLD) || 100;
 
 // ─── GET /api/orders — lista pedidos do usuário logado ────────────────────────
 router.get('/', requireAuth, (req, res) => {
@@ -184,6 +182,10 @@ router.post('/',
         orderId,
         subtotal,
         shippingCost,
+        shippingZone: shippingCalc.zone,
+        shippingLabel: shippingCalc.label,
+        shippingDays: shippingCalc.days,
+        shippingFree: shippingCalc.free,
         total,
         message: 'Pedido criado. Prossiga para o pagamento.',
       });

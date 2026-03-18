@@ -445,7 +445,17 @@
   </div>
   <div class="cart-items-list" id="cart-body"></div>
   <div class="cart-foot" id="cart-foot" style="display:none">
-    <div class="cart-total-row"><span>Total</span><span class="cart-total-val" id="cart-total">R$ 0,00</span></div>
+    <div class="cart-total-row" style="font-size:.95rem">
+      <span style="font-size:.88rem;color:#8B7060">Subtotal</span>
+      <span class="cart-total-val" id="cart-total">R$ 0,00</span>
+    </div>
+    <div style="font-size:.78rem;color:#8B7060;text-align:right;margin-bottom:12px">+ frete calculado no checkout</div>
+    <div id="cart-free-shipping-bar" style="display:none;margin-bottom:12px">
+      <div style="font-size:.76rem;color:var(--green);margin-bottom:4px" id="cart-free-msg"></div>
+      <div style="background:var(--tan);border-radius:100px;height:5px;overflow:hidden">
+        <div id="cart-free-bar" style="height:100%;background:var(--green);border-radius:100px;transition:width .4s"></div>
+      </div>
+    </div>
     <button class="checkout-cta" onclick="startCheckout()">Finalizar Compra →</button>
     <div class="mp-note">🔒 Pagamento seguro via <span class="mp-badge">Mercado Pago</span></div>
   </div>
@@ -481,7 +491,7 @@
 
 <!-- CHECKOUT MODAL -->
 <div class="modal-overlay" id="checkout-modal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:540px;max-height:92vh;overflow-y:auto">
     <button class="modal-close" onclick="closeCheckoutModal()">✕</button>
     <div class="modal-logo">Grano<span>Vita</span></div>
     <p class="modal-sub">Preencha os dados de entrega</p>
@@ -500,12 +510,54 @@
         </div>
         <div class="form-row">
           <div class="form-group"><label>Cidade</label><input type="text" class="form-input" id="sh-city" required/></div>
-          <div class="form-group"><label>Estado</label><select class="form-input" id="sh-state" required><option value="">UF</option><option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option selected>SP</option><option>SE</option><option>TO</option></select></div>
+          <div class="form-group">
+            <label>Estado</label>
+            <select class="form-input" id="sh-state" required onchange="onStateChange()">
+              <option value="">UF</option>
+              <option>AC</option><option>AL</option><option>AP</option><option>AM</option>
+              <option>BA</option><option>CE</option><option>DF</option><option>ES</option>
+              <option>GO</option><option>MA</option><option>MT</option><option>MS</option>
+              <option>MG</option><option>PA</option><option>PB</option><option>PR</option>
+              <option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+              <option>RS</option><option>RO</option><option>RR</option><option>SC</option>
+              <option selected>SP</option><option>SE</option><option>TO</option>
+            </select>
+          </div>
         </div>
       </div>
+
+      <!-- RESUMO DO PEDIDO + FRETE -->
+      <div id="checkout-summary" style="margin-top:16px;background:var(--cream);border-radius:12px;padding:16px;border:1px solid var(--tan)">
+        <div style="font-size:.8rem;font-weight:600;color:var(--brown);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">Resumo do pedido</div>
+        <div id="summary-items" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--tan)">
+          <!-- preenchido via JS -->
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.88rem;color:#7A5C45;margin-bottom:6px">
+          <span>Subtotal</span>
+          <span id="summary-subtotal">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:.88rem;color:#7A5C45;margin-bottom:8px">
+          <span>Frete <span id="shipping-zone-label" style="font-size:.75rem;color:#A8845A"></span></span>
+          <div id="summary-shipping" style="font-weight:500">
+            <span style="color:#A8845A;font-size:.8rem">Selecione o estado →</span>
+          </div>
+        </div>
+        <div id="shipping-days-info" style="font-size:.75rem;color:#A8845A;text-align:right;margin-bottom:8px;display:none"></div>
+        <div id="free-shipping-progress" style="display:none;margin-bottom:10px">
+          <div style="font-size:.75rem;color:var(--green);margin-bottom:4px" id="free-shipping-msg"></div>
+          <div style="background:var(--tan);border-radius:100px;height:6px;overflow:hidden">
+            <div id="free-shipping-bar" style="height:100%;background:var(--green);border-radius:100px;transition:width .4s ease"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:'Playfair Display',serif;font-size:1.15rem;color:var(--dark);font-weight:700;padding-top:8px;border-top:1px solid var(--tan)">
+          <span>Total</span>
+          <span id="summary-total" style="color:var(--brown)">—</span>
+        </div>
+      </div>
+
       <div class="form-error" id="checkout-error"></div>
-      <button type="submit" class="form-submit" id="checkout-submit" style="margin-top:20px">Ir para Pagamento →</button>
-      <div class="mp-note" style="margin-top:10px">🔒 Redirecionado ao Mercado Pago com segurança</div>
+      <button type="submit" class="form-submit" id="checkout-submit" style="margin-top:16px">Ir para Pagamento →</button>
+      <div class="mp-note" style="margin-top:10px">🔒 Pagamento seguro via Mercado Pago</div>
     </form>
   </div>
 </div>
@@ -1261,6 +1313,23 @@ function renderCart() {
   }
   foot.style.display = 'block';
   document.getElementById('cart-total').textContent = `R$ ${total.toFixed(2).replace('.',',')}`;
+
+  // Free shipping progress in cart
+  const threshold = 100;
+  const cartFreeBar = document.getElementById('cart-free-shipping-bar');
+  if (cartFreeBar) {
+    if (total >= threshold) {
+      cartFreeBar.style.display = 'none';
+    } else {
+      cartFreeBar.style.display = 'block';
+      const remaining = (threshold - total).toFixed(2).replace('.', ',');
+      const pct = Math.min(100, (total / threshold) * 100);
+      const msgEl = document.getElementById('cart-free-msg');
+      const barEl = document.getElementById('cart-free-bar');
+      if (msgEl) msgEl.textContent = `🚚 Falta R$ ${remaining} para frete GRÁTIS!`;
+      if (barEl) barEl.style.width = pct + '%';
+    }
+  }
   body.innerHTML = cart.map(i => `
     <div class="ci">
       <div class="ci-vis ${PV[i.sku]||'pv1'}">${PE[i.sku]||'🥣'}</div>
@@ -1418,6 +1487,9 @@ async function logout() {
 // ═══════════════════════════════════════════════════════════
 //  CHECKOUT
 // ═══════════════════════════════════════════════════════════
+// Shipping state
+let _shippingEstimate = null;
+
 function startCheckout() {
   if (!currentUser) {
     toggleCart();
@@ -1427,7 +1499,90 @@ function startCheckout() {
   }
   toggleCart();
   document.getElementById('sh-name').value = currentUser.name;
+  document.getElementById('checkout-error').textContent = '';
+  _shippingEstimate = null;
+  populateCheckoutSummary();
   document.getElementById('checkout-modal').classList.add('open');
+}
+
+function populateCheckoutSummary() {
+  const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const itemsEl  = document.getElementById('summary-items');
+  if (itemsEl) {
+    itemsEl.innerHTML = cart.map(i =>
+      '<div style="display:flex;justify-content:space-between;font-size:.84rem;color:#5A4535">' +
+      '<span>' + i.quantity + '× ' + i.name + '</span>' +
+      '<span>R$ ' + (i.price * i.quantity).toFixed(2).replace('.', ',') + '</span>' +
+      '</div>'
+    ).join('');
+  }
+  const subEl = document.getElementById('summary-subtotal');
+  if (subEl) subEl.textContent = 'R$ ' + subtotal.toFixed(2).replace('.', ',');
+  updateTotalDisplay(subtotal, null);
+  updateFreeShippingBar(subtotal);
+}
+
+function updateTotalDisplay(subtotal, shippingCost) {
+  const totalEl = document.getElementById('summary-total');
+  const shippingEl = document.getElementById('summary-shipping');
+  if (!totalEl || !shippingEl) return;
+
+  if (shippingCost === null) {
+    shippingEl.innerHTML = '<span style="color:#A8845A;font-size:.8rem">Selecione o estado →</span>';
+    totalEl.textContent = '—';
+  } else if (shippingCost === 0) {
+    shippingEl.innerHTML = '<span style="color:var(--green);font-weight:600">GRÁTIS 🎉</span>';
+    totalEl.textContent = 'R$ ' + subtotal.toFixed(2).replace('.', ',');
+  } else {
+    shippingEl.innerHTML = '<span style="font-weight:500">R$ ' + shippingCost.toFixed(2).replace('.', ',') + '</span>';
+    totalEl.textContent = 'R$ ' + (subtotal + shippingCost).toFixed(2).replace('.', ',');
+  }
+}
+
+function updateFreeShippingBar(subtotal) {
+  const progressEl = document.getElementById('free-shipping-progress');
+  const msgEl = document.getElementById('free-shipping-msg');
+  const barEl = document.getElementById('free-shipping-bar');
+  if (!progressEl) return;
+
+  // Get threshold from settings or default
+  const threshold = 100; // Will match backend FREE_SHIPPING_THRESHOLD
+  if (subtotal >= threshold) {
+    progressEl.style.display = 'none';
+    return;
+  }
+  const remaining = (threshold - subtotal).toFixed(2).replace('.', ',');
+  const pct = Math.min(100, (subtotal / threshold) * 100);
+  progressEl.style.display = 'block';
+  if (msgEl) msgEl.textContent = 'Falta R$ ' + remaining + ' para frete grátis!';
+  if (barEl) barEl.style.width = pct + '%';
+}
+
+async function onStateChange() {
+  const state = document.getElementById('sh-state').value;
+  if (!state) return;
+  const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+
+  try {
+    const data = await apiFetch('/api/shipping/estimate?state=' + state + '&subtotal=' + subtotal.toFixed(2));
+    _shippingEstimate = data;
+
+    // Update zone label
+    const zoneLabel = document.getElementById('shipping-zone-label');
+    if (zoneLabel) zoneLabel.textContent = '— ' + data.label;
+
+    // Update days info
+    const daysEl = document.getElementById('shipping-days-info');
+    if (daysEl) {
+      daysEl.textContent = '📅 Prazo estimado: ' + data.days + ' dias úteis após confirmação';
+      daysEl.style.display = 'block';
+    }
+
+    updateTotalDisplay(subtotal, data.cost);
+    updateFreeShippingBar(subtotal);
+  } catch (err) {
+    console.error('Shipping estimate error:', err);
+  }
 }
 function closeCheckoutModal() {
   document.getElementById('checkout-modal').classList.remove('open');

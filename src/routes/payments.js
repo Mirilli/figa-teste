@@ -45,23 +45,40 @@ router.post('/checkout/:orderId', requireAuth, async (req, res) => {
 
   try {
     const preference = new Preference(mpClient);
+
+    // O Mercado Pago exige que unit_price seja exato e com no máximo 2 casas decimais.
+    // Usamos parseFloat + toFixed(2) para garantir consistência.
+    const round2 = (n) => parseFloat(parseFloat(n).toFixed(2));
+
     const mpItems = items.map(i => ({
       id: String(i.product_id),
       title: i.product_name,
       description: i.product_sku,
-      quantity: i.quantity,
+      quantity: Number(i.quantity),
       currency_id: 'BRL',
-      unit_price: Number(i.unit_price),
+      unit_price: round2(i.unit_price),
     }));
 
-    // Frete como item separado se houver
-    if (order.shipping_cost > 0) {
+    // Frete como item separado
+    if (round2(order.shipping_cost) > 0) {
       mpItems.push({
-        id: 'SHIPPING',
+        id: 'FRETE',
         title: 'Frete',
+        description: 'Entrega via Correios',
         quantity: 1,
         currency_id: 'BRL',
-        unit_price: Number(order.shipping_cost),
+        unit_price: round2(order.shipping_cost),
+      });
+    }
+
+    // Verifica que o total dos itens bate com o total do pedido
+    const mpTotal = mpItems.reduce((s, i) => s + round2(i.unit_price * i.quantity), 0);
+    const orderTotal = round2(order.total);
+    if (Math.abs(mpTotal - orderTotal) > 0.01) {
+      console.error(`[Payments] Divergência: MP=${mpTotal} Order=${orderTotal}`);
+      auditLog(req.user.id, 'payment_total_mismatch', req, {
+        entity: 'order', entityId: orderId,
+        details: { mpTotal, orderTotal },
       });
     }
 
